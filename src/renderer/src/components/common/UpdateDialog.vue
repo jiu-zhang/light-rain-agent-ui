@@ -50,7 +50,7 @@ onMounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="dialog">
-      <div v-if="visible" class="update-overlay" @click.self="postpone">
+      <div v-if="visible" class="update-overlay">
         <div class="update-dialog">
           <!-- Ambient glow -->
           <div class="glow" />

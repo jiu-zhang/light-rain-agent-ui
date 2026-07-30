@@ -4,7 +4,7 @@
  */
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { chatApi } from '@renderer/api'
+import { chatApi } from '@renderer/api/chat'
 import { useChatStore } from '@renderer/stores'
 import { formatRelativeTime } from '@renderer/utils'
 import type { Session } from '@renderer/types'

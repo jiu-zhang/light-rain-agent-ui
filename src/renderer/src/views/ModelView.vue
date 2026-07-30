@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { providerApi, modelApi } from '@renderer/api'
+import { providerApi } from '@renderer/api/provider'
+import { modelApi } from '@renderer/api/model'
 import type { AiProvider, AiModel, AiModelList } from '@renderer/types'
 
 const providers = ref<AiProvider[]>([])
