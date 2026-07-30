@@ -78,7 +78,7 @@ export function setBackendPort(port: number): void {
 
 export default api
 
-// 导出各模块 API
+// 直接引入各模块（不通过 barrel export 避免循环依赖）
 export { chatApi } from './chat'
 export { modelApi } from './model'
 export { providerApi } from './provider'

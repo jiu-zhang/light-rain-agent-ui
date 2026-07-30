@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { configApi } from '@renderer/api'
+import { configApi } from '@renderer/api/config'
 
 const configs = ref<Record<string, string>>({})
 const loading = ref(false)
