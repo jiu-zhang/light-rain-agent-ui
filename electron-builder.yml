@@ -14,10 +14,16 @@ asarUnpack:
 win:
   executableName: LightRain
 nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
   artifactName: LightRain-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  createStartMenuShortcut: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
