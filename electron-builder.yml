@@ -22,8 +22,6 @@ nsis:
   uninstallDisplayName: LightRain
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  installerIcon: build/icon.ico
-  uninstallerIcon: build/icon.ico
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
@@ -44,6 +42,13 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+extraResources:
+  - from: resources/backend/
+    to: backend/
+  - from: resources/runtime/
+    to: runtime/
+    filter:
+      - '**/*'
 publish:
   provider: github
   owner: jiu-zhang

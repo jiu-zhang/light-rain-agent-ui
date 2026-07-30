@@ -2,7 +2,7 @@
  * Axios 实例配置
  * <p>
  * 配置基础 URL、请求/响应拦截器、超时时间等。
- * 生产环境下 Electron 从 file:// 加载页面，需要直接指定后端地址。
+ * 开发环境通过 Vite proxy 转发到后端；生产环境由主进程启动后端后通知端口。
  * </p>
  */
 import axios from 'axios'
@@ -16,8 +16,6 @@ import type { ApiResponse } from '@renderer/types'
  * </p>
  */
 function protectLargeNumbers(json: string): string {
-  // JSON.parse 在调用 reviver 之前就已丢失精度（数字被截断为 53 位）
-  // 因此在字符串层面，将超过 15 位的大整数包上引号转为字符串
   return json.replace(
     /(:\s*|,\s*|\]\s*|\{\s*)(\d{16,})(\s*,|\s*\}|\s*\]|$)/g,
     '$1"$2"$3'
@@ -48,7 +46,6 @@ const api = axios.create({
 /** 请求拦截器 */
 api.interceptors.request.use(
   (config) => {
-    // 可以在这里添加 token 等认证信息
     return config
   },
   (error) => {
@@ -70,6 +67,14 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+/**
+ * 更新后端地址（由主进程通知端口后调用）
+ * 生产环境 Electron 从 file:// 加载页面，需要直接指定后端地址。
+ */
+export function setBackendPort(port: number): void {
+  api.defaults.baseURL = `http://127.0.0.1:${port}`
+}
 
 export default api
 
