@@ -1,10 +1,10 @@
 {
-  "name": "light-rain-agent-ui",
+  "name": "lightrain",
   "version": "1.0.0",
-  "description": "An Electron application with Vue and TypeScript",
+  "description": "LightRain - AI 智能助手桌面应用",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "jiu-zhang",
+  "homepage": "https://github.com/jiu-zhang/light-rain-agent-ui",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
