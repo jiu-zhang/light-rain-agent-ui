@@ -64,8 +64,58 @@ app.whenReady().then(() => {
 
   // 自动更新（仅生产环境）
   if (!is.dev) {
-    autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.autoDownload = false
+    autoUpdater.autoInstallOnAppQuit = false
+
+    autoUpdater.on('error', (err) => {
+      console.error('[AutoUpdater]', err.message)
+    })
+
+    autoUpdater.on('update-available', (info) => {
+      const win = BrowserWindow.getFocusedWindow()
+      if (win) {
+        win.webContents.send('update-available', {
+          version: info.version,
+          releaseDate: info.releaseDate
+        })
+      }
+    })
+
+    autoUpdater.on('update-not-available', () => {
+      console.log('[AutoUpdater] already up to date')
+    })
+
+    autoUpdater.on('download-progress', (progress) => {
+      const win = BrowserWindow.getFocusedWindow()
+      if (win) {
+        win.webContents.send('update-download-progress', {
+          percent: Math.round(progress.percent),
+          bytesPerSecond: progress.bytesPerSecond,
+          transferred: progress.transferred,
+          total: progress.total
+        })
+      }
+    })
+
+    autoUpdater.on('update-downloaded', (info) => {
+      const win = BrowserWindow.getFocusedWindow()
+      if (win) {
+        win.webContents.send('update-downloaded', {
+          version: info.version
+        })
+      }
+    })
+
+    // 用户确认下载
+    ipcMain.on('start-update-download', () => {
+      autoUpdater.downloadUpdate()
+    })
+
+    // 用户确认安装
+    ipcMain.on('restart-and-install', () => {
+      autoUpdater.quitAndInstall()
+    })
+
     // 延迟检查，让窗口先显示
     setTimeout(() => autoUpdater.checkForUpdates(), 3000)
   }
