@@ -53,6 +53,6 @@ publish:
   provider: github
   owner: jiu-zhang
   repo: light-rain-agent-ui
-  private: true
+  private: false
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
