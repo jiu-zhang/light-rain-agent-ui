@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
 const api = {
+  // 自动更新
   onUpdateAvailable: (callback: (info: { version: string; releaseDate: string }) => void) => {
     ipcRenderer.on('update-available', (_event, info) => callback(info))
   },
@@ -13,7 +14,11 @@ const api = {
     ipcRenderer.on('update-downloaded', (_event, info) => callback(info))
   },
   startUpdateDownload: () => ipcRenderer.send('start-update-download'),
-  restartAndInstall: () => ipcRenderer.send('restart-and-install')
+  restartAndInstall: () => ipcRenderer.send('restart-and-install'),
+  // 后端
+  onBackendReady: (callback: (info: { port: number; external?: boolean }) => void) => {
+    ipcRenderer.on('backend-ready', (_event, info) => callback(info))
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
