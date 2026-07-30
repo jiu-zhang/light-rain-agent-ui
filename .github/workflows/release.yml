@@ -34,10 +34,11 @@ jobs:
 
       - name: Upload installer and update metadata
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: LightRain ${{ github.ref_name }}
-          files: |
-            dist/*.exe
-            dist/latest.yml
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            dist/*.exe dist/latest.yml \
+            --title "LightRain ${{ github.ref_name }}" \
+            --generate-notes \
+            --repo "${{ github.repository }}"

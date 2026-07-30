@@ -17,6 +17,8 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
+  installDir: LightRain
+  installDirInProgramFiles: LightRain
   artifactName: LightRain-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
