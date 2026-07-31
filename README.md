@@ -33,36 +33,6 @@ $ npm run build:mac
 $ npm run build:linux
 ```
 
-## Build and Release (CI/CD)
-
-This project uses **GitHub Actions** to automatically build and release Windows installer (.exe) on every version tag.
-
-### How it works
-
-1. Push code to `main` branch → runs type check and build verification
-2. Push a `v*` tag (e.g. `v1.0.0`) → builds the app, packages it into an NSIS installer, and creates a GitHub Release
-
-### Publishing a new version
-
-```bash
-# 1. Update version in package.json, then commit
-git add . && git commit -m "chore: release v1.1.0"
-
-# 2. Tag and push
-git tag v1.1.0
-git push origin main --tags
-```
-
-After pushing the tag:
-1. Go to GitHub → **Actions** tab → `Build and Release` workflow runs automatically
-2. Once complete, go to **Releases** tab to find the `.exe` installer
-
-### Auto-update
-
-The app uses `electron-updater` with GitHub Releases as the update source. After a user installs the app, future versions are downloaded and installed automatically when a new release is published — no manual download needed.
-
----
-
 ## 构建与发布 (CI/CD)
 
 本项目使用 **GitHub Actions** 在每次版本标签推送时自动构建并发布 Windows 安装包 (.exe)。
@@ -76,11 +46,10 @@ The app uses `electron-updater` with GitHub Releases as the update source. After
 
 ```bash
 # 1. 修改 package.json 中的版本号，然后提交
-git add . && git commit -m "chore: release v1.1.0"
 
 # 2. 打标签并推送
 git tag v1.1.0
-git push origin main --tags
+git push origin master --tags
 ```
 
 推送标签后：
