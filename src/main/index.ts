@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
@@ -10,6 +10,65 @@ import icon from '../../resources/icon.png?asset'
 // Windows 字体渲染优化
 if (process.platform === 'win32') {
   app.commandLine.appendSwitch('disable-software-rasterizer')
+}
+
+// ─── 单实例锁 ──────────────────────────────────────
+let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let appReady = false
+
+let gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) {
+      if (appReady) {
+        mainWindow = createWindow()
+        startBackend(mainWindow)
+      }
+      return
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    if (!mainWindow.isVisible()) mainWindow.show()
+    mainWindow.focus()
+  })
+}
+
+/** 创建系统托盘 */
+function createTray(): void {
+  // 使用 build 目录中的图标
+  const trayIcon = nativeImage.createFromPath(join(__dirname, '../../resources/icon.png'))
+  tray = new Tray(trayIcon.resize({ width: 16, height: 16 }))
+  tray.setToolTip('LightRain')
+
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: '显示窗口',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show()
+          mainWindow.focus()
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        stopBackend()
+        if (tray) { tray.destroy(); tray = null }
+        app.quit()
+      }
+    }
+  ]))
+
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
 }
 
 // ─── 后端管理 ──────────────────────────────────────
@@ -47,9 +106,8 @@ function getJavaPath(): string {
 
 /** 启动后端 JAR */
 async function startBackend(win: BrowserWindow): Promise<void> {
-  // 开发环境：不启动后端，由 Vite proxy 转发
+  // 开发环境：不启动后端，由 Vite proxy 转发（ready-to-show 中已发 backend-ready）
   if (is.dev) {
-    win.webContents.send('backend-ready', { port: DEFAULT_PORT })
     return
   }
 
@@ -131,7 +189,7 @@ function stopBackend(): void {
 
 // ─── 窗口创建 ──────────────────────────────────────
 function createWindow(): BrowserWindow {
-  const mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 1000,
@@ -141,29 +199,62 @@ function createWindow(): BrowserWindow {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webSecurity: false
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  win.on('ready-to-show', () => {
+    win.show()
+    createTray()
+    // 确保渲染进程已就绪后再发送 backend-ready
+    if (is.dev) {
+      win.webContents.send('backend-ready', { port: DEFAULT_PORT })
+    }
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  // 关闭到托盘而不是退出
+  win.on('close', async (event) => {
+    if (isQuitting) return
+    event.preventDefault()
+
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: ['退出应用', '到后台运行'],
+      defaultId: 1,
+      title: 'LightRain',
+      message: '关闭后是否退出应用？',
+      icon: null
+    })
+
+    if (response === 0) {
+      // 退出
+      isQuitting = true
+      stopBackend()
+      if (tray) { tray.destroy(); tray = null }
+      app.quit()
+    }
+    // response === 1: 隐藏到后台
+    win.hide()
+  })
+
+  win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  return mainWindow
+  return win
 }
 
 // ─── 应用生命周期 ──────────────────────────────────
+let isQuitting = false
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.jiuzhang.lightrain')
 
@@ -173,7 +264,16 @@ app.whenReady().then(() => {
 
   ipcMain.on('ping', () => console.log('pong'))
 
-  const mainWindow = createWindow()
+  // 来自 IPC：用户点击了"退出"
+  ipcMain.on('quit-app', () => {
+    isQuitting = true
+    stopBackend()
+    if (tray) { tray.destroy(); tray = null }
+    app.quit()
+  })
+
+  mainWindow = createWindow()
+  appReady = true
 
   // 启动后端
   startBackend(mainWindow)
@@ -188,7 +288,7 @@ app.whenReady().then(() => {
     })
 
     autoUpdater.on('update-available', (info) => {
-      mainWindow.webContents.send('update-available', {
+      mainWindow!.webContents.send('update-available', {
         version: info.version,
         releaseDate: info.releaseDate
       })
@@ -199,7 +299,7 @@ app.whenReady().then(() => {
     })
 
     autoUpdater.on('download-progress', (progress) => {
-      mainWindow.webContents.send('update-download-progress', {
+      mainWindow!.webContents.send('update-download-progress', {
         percent: Math.round(progress.percent),
         bytesPerSecond: progress.bytesPerSecond,
         transferred: progress.transferred,
@@ -208,7 +308,7 @@ app.whenReady().then(() => {
     })
 
     autoUpdater.on('update-downloaded', (info) => {
-      mainWindow.webContents.send('update-downloaded', { version: info.version })
+      mainWindow!.webContents.send('update-downloaded', { version: info.version })
     })
 
     ipcMain.on('start-update-download', () => autoUpdater.downloadUpdate())
@@ -223,8 +323,10 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  stopBackend()
-  if (process.platform !== 'darwin') app.quit()
+  // 关闭窗口不退出，仅隐藏到托盘
 })
 
-app.on('before-quit', () => stopBackend())
+app.on('before-quit', () => {
+  stopBackend()
+  isQuitting = true
+})

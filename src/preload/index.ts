@@ -18,7 +18,9 @@ const api = {
   // 后端
   onBackendReady: (callback: (info: { port: number; external?: boolean }) => void) => {
     ipcRenderer.on('backend-ready', (_event, info) => callback(info))
-  }
+  },
+  // 退出应用
+  quitApp: () => ipcRenderer.send('quit-app')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -7,6 +7,7 @@ interface UpdateAPI {
   startUpdateDownload: () => void
   restartAndInstall: () => void
   onBackendReady: (callback: (info: { port: number; external?: boolean }) => void) => void
+  quitApp: () => void
 }
 
 declare global {

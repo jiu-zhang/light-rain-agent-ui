@@ -2,6 +2,8 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { getThemeMode, setThemeMode, getAiParams, setAiParams, type ThemeMode } from '@renderer/utils'
 
+declare const __APP_VERSION__: string
+
 const activeTab = ref('general')
 
 const tabs = [
@@ -93,10 +95,10 @@ const voiceSettings = reactive({
 })
 
 const versionInfo = {
-  version: '1.0.0',
-  electron: '39.2.6',
+  version: __APP_VERSION__,
+  electron: process.versions.electron ?? '',
   vue: '3.5.25',
-  node: '20.11.0'
+  node: process.versions.node ?? ''
 }
 
 function setThemeDirect(mode: ThemeMode): void {

@@ -16,7 +16,7 @@ export const chatApi = {
     const controller = new AbortController()
     abortControllers.set(request.sessionId, controller)
 
-    fetch('/api/ai/chat', {
+    fetch(`${api.defaults.baseURL}/ai/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
