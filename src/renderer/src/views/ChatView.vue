@@ -41,6 +41,11 @@ async function loadEnabledModels(): Promise<void> {
 
 function handleNewSession(): void { chatStore.createSession() }
 
+function handleSettingsClose(): void {
+  showSettings = false
+  loadEnabledModels()
+}
+
 function handleSend(text: string): void {
   if (!chatStore.currentSessionId) chatStore.createSession()
   const modelId = chatInputRef.value?.selectedModelId
@@ -115,7 +120,7 @@ onMounted(async () => {
       </div>
       <ChatInput ref="chatInputRef" :loading="chatStore.loading" :enabled-providers="enabledProviders" @send="handleSend" @stop="handleStop" />
     </div>
-    <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <SettingsModal v-if="showSettings" @close="handleSettingsClose" />
   </div>
 </template>
 
