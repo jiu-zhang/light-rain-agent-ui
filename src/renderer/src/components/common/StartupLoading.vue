@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { setBackendPort } from '@renderer/api/index'
 
 declare const __APP_VERSION__: string
+const appVersion = __APP_VERSION__
 
 const visible = ref(true)
 const status = ref('正在启动服务...')
@@ -22,8 +23,10 @@ onMounted(() => {
   }, 5000)
 
   // 等待后端就绪
-  window.api.onBackendReady(({ port }) => {
-    setBackendPort(port)
+  window.api.onBackendReady(({ port, dev }) => {
+    if (!dev) {
+      setBackendPort(port)
+    }
     clearInterval(msgTimer)
     // 淡出动画后隐藏
     visible.value = false
@@ -70,7 +73,7 @@ onMounted(() => {
       </div>
 
       <!-- 版本号 -->
-      <p class="version">v{{ __APP_VERSION__ }}</p>
+      <p class="version">v{{ appVersion }}</p>
     </div>
   </Transition>
 </template>

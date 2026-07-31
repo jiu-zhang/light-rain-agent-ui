@@ -1,12 +1,15 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
 interface UpdateAPI {
-  onUpdateAvailable: (callback: (info: { version: string; releaseDate: string }) => void) => void
+  onUpdateAvailable: (callback: (info: { currentVersion: string; version: string; releaseDate: string }) => void) => void
   onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => void
   onUpdateDownloaded: (callback: (info: { version: string }) => void) => void
   startUpdateDownload: () => void
   restartAndInstall: () => void
-  onBackendReady: (callback: (info: { port: number; external?: boolean }) => void) => void
+  onBackendReady: (callback: (info: { port: number; external?: boolean; dev?: boolean }) => void) => void
+  onConfirmClose: (callback: () => void) => void
+  closeApp: () => void
+  hideToTray: () => void
   quitApp: () => void
 }
 

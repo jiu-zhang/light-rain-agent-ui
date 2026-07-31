@@ -76,6 +76,11 @@ export function setBackendPort(port: number): void {
   api.defaults.baseURL = `http://127.0.0.1:${port}`
 }
 
+export function getBackendPort(): number {
+  const m = api.defaults.baseURL.match(/127\.0\.0\.1:(\d+)/)
+  return m ? Number(m[1]) : 0
+}
+
 export default api
 
 // 直接引入各模块（不通过 barrel export 避免循环依赖）

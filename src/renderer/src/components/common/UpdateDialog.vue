@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 
-declare const __APP_VERSION__: string
-
 type UpdateState = 'idle' | 'available' | 'downloading' | 'downloaded'
 
 const state = ref<UpdateState>('idle')
-const currentVersion = __APP_VERSION__
+const currentVersion = ref('')
 const newVersion = ref('')
 const progress = ref(0)
 const visible = ref(false)
 
-function onUpdateAvailable(info: { version: string; releaseDate: string }): void {
+function onUpdateAvailable(info: { currentVersion: string; version: string; releaseDate: string }): void {
+  currentVersion.value = info.currentVersion
   newVersion.value = info.version
   state.value = 'available'
   visible.value = true

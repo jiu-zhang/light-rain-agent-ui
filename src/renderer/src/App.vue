@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { initTheme } from '@renderer/utils'
 import RainBackground from '@renderer/components/background/RainBackground.vue'
 import UpdateDialog from '@renderer/components/common/UpdateDialog.vue'
+import CloseConfirm from '@renderer/components/common/CloseConfirm.vue'
 import StartupLoading from '@renderer/components/common/StartupLoading.vue'
 
 onMounted(() => {
@@ -15,4 +16,5 @@ onMounted(() => {
   <RainBackground />
   <router-view />
   <UpdateDialog />
+  <CloseConfirm />
 </template>

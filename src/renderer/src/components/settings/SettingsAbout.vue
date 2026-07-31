@@ -1,5 +1,6 @@
 <script setup lang="ts">
 declare const __APP_VERSION__: string
+const appVersion = __APP_VERSION__
 </script>
 
 <template>
@@ -17,7 +18,7 @@ declare const __APP_VERSION__: string
       </svg>
     </div>
     <h3 class="about-name">Light Rain Agent</h3>
-    <p class="about-version">v{{ __APP_VERSION__ }}</p>
+    <p class="about-version">v{{ appVersion }}</p>
     <div class="about-info">
       <div class="info-row"><span class="info-label">Electron</span><span class="info-value">39.2.6</span></div>
       <div class="info-row"><span class="info-label">Vue</span><span class="info-value">3.5.25</span></div>
