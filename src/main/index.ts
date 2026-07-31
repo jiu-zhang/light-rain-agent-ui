@@ -223,8 +223,7 @@ function createWindow(): BrowserWindow {
       buttons: ['退出应用', '到后台运行'],
       defaultId: 1,
       title: 'LightRain',
-      message: '关闭后是否退出应用？',
-      icon: null
+      message: '关闭后是否退出应用？'
     })
 
     if (response === 0) {
