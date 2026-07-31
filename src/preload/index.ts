@@ -19,6 +19,12 @@ const api = {
   onBackendReady: (callback: (info: { port: number; external?: boolean }) => void) => {
     ipcRenderer.on('backend-ready', (_event, info) => callback(info))
   },
+  // 关闭确认弹窗
+  onConfirmClose: (callback: () => void) => {
+    ipcRenderer.on('confirm-close', () => callback())
+  },
+  closeApp: () => ipcRenderer.send('close-app'),
+  hideToTray: () => ipcRenderer.send('hide-to-tray'),
   // 退出应用
   quitApp: () => ipcRenderer.send('quit-app')
 }

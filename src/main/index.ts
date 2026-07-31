@@ -199,42 +199,24 @@ function createWindow(): BrowserWindow {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      webSecurity: false
+      sandbox: false
     }
   })
 
   win.on('ready-to-show', () => {
     win.show()
     createTray()
-    // 确保渲染进程已就绪后再发送 backend-ready
+    // 开发环境：通知渲染进程隐藏启动画面，但不改 baseURL（保留 Vite proxy）
     if (is.dev) {
-      win.webContents.send('backend-ready', { port: DEFAULT_PORT })
+      win.webContents.send('backend-ready', { port: DEFAULT_PORT, dev: true })
     }
   })
 
-  // 关闭到托盘而不是退出
-  win.on('close', async (event) => {
+  // 关闭时通知渲染进程弹出自定义确认弹窗
+  win.on('close', (event) => {
     if (isQuitting) return
     event.preventDefault()
-
-    const { response } = await dialog.showMessageBox(win, {
-      type: 'question',
-      buttons: ['退出应用', '到后台运行'],
-      defaultId: 1,
-      title: 'LightRain',
-      message: '关闭后是否退出应用？'
-    })
-
-    if (response === 0) {
-      // 退出
-      isQuitting = true
-      stopBackend()
-      if (tray) { tray.destroy(); tray = null }
-      app.quit()
-    }
-    // response === 1: 隐藏到后台
-    win.hide()
+    win.webContents.send('confirm-close')
   })
 
   win.webContents.setWindowOpenHandler((details) => {
@@ -271,6 +253,18 @@ app.whenReady().then(() => {
     app.quit()
   })
 
+  // 关闭确认弹窗的选择
+  ipcMain.on('close-app', () => {
+    isQuitting = true
+    stopBackend()
+    if (tray) { tray.destroy(); tray = null }
+    app.quit()
+  })
+
+  ipcMain.on('hide-to-tray', () => {
+    mainWindow?.hide()
+  })
+
   mainWindow = createWindow()
   appReady = true
 
@@ -288,6 +282,7 @@ app.whenReady().then(() => {
 
     autoUpdater.on('update-available', (info) => {
       mainWindow!.webContents.send('update-available', {
+        currentVersion: app.getVersion(),
         version: info.version,
         releaseDate: info.releaseDate
       })
