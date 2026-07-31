@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 
+declare const __APP_VERSION__: string
+
 type UpdateState = 'idle' | 'available' | 'downloading' | 'downloaded'
 
 const state = ref<UpdateState>('idle')
-const version = ref('')
+const currentVersion = __APP_VERSION__
+const newVersion = ref('')
 const progress = ref(0)
 const visible = ref(false)
 
 function onUpdateAvailable(info: { version: string; releaseDate: string }): void {
-  version.value = info.version
+  newVersion.value = info.version
   state.value = 'available'
   visible.value = true
 }
@@ -20,7 +23,7 @@ function onDownloadProgress(p: { percent: number }): void {
 }
 
 function onUpdateDownloaded(info: { version: string }): void {
-  version.value = info.version
+  newVersion.value = info.version
   state.value = 'downloaded'
   progress.value = 100
 }
@@ -67,7 +70,7 @@ onMounted(() => {
             </div>
             <div class="header-text">
               <span class="title">发现新版本</span>
-              <span class="version-badge">v{{ version }}</span>
+              <span class="version-badge">v{{ newVersion }}</span>
             </div>
           </div>
 
@@ -78,7 +81,11 @@ onMounted(() => {
               <p class="desc">新版本已就绪，是否立即下载更新？</p>
               <div class="info-row">
                 <span class="info-label">当前版本</span>
-                <span class="info-value">{{ version }}</span>
+                <span class="info-value">v{{ currentVersion }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">最新版本</span>
+                <span class="info-value">v{{ newVersion }}</span>
               </div>
               <button class="btn-primary" @click="startDownload">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
