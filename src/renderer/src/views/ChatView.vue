@@ -42,7 +42,7 @@ async function loadEnabledModels(): Promise<void> {
 function handleNewSession(): void { chatStore.createSession() }
 
 function handleSettingsClose(): void {
-  showSettings = false
+  showSettings.value = false
   loadEnabledModels()
 }
 
