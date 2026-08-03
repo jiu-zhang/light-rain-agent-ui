@@ -7,3 +7,5 @@ const pinia = createPinia()
 
 export default pinia
 export { useChatStore } from './chat'
+export { useUiStore, MODE_OPTIONS } from './ui'
+export type { AppMode } from './ui'

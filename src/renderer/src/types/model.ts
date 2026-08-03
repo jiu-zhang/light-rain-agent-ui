@@ -33,6 +33,12 @@ export interface AiModelEnabled {
   name: string
 }
 
+/** 模型连通性测试结果 */
+export interface ModelTestVO {
+  modelName: string
+  latencyMs: number
+}
+
 /** 模型列表（管理用） */
 export interface AiModelList {
   id: number

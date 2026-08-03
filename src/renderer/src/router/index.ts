@@ -23,6 +23,36 @@ const router = createRouter({
       component: () => import('@renderer/views/ModelView.vue')
     },
     {
+      path: '/cron',
+      name: 'Cron',
+      component: () => import('@renderer/views/CronView.vue')
+    },
+    {
+      path: '/executions',
+      name: 'Executions',
+      component: () => import('@renderer/views/ExecutionView.vue')
+    },
+    {
+      path: '/plans',
+      name: 'Plans',
+      component: () => import('@renderer/views/PlanTemplatesView.vue')
+    },
+    {
+      path: '/files',
+      name: 'Files',
+      component: () => import('@renderer/views/FileBrowserView.vue')
+    },
+    {
+      path: '/mcp',
+      name: 'Mcp',
+      component: () => import('@renderer/views/McpView.vue')
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('@renderer/views/SettingsView.vue')
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/'
     }

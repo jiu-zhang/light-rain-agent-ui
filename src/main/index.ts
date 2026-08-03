@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, globalShortcut } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
@@ -6,6 +6,7 @@ import * as net from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
+import { DEFAULT_BACKEND_PORT } from '../shared/constants'
 
 // Windows 字体渲染优化
 if (process.platform === 'win32') {
@@ -17,7 +18,7 @@ let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let appReady = false
 
-let gotLock = app.requestSingleInstanceLock()
+const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
@@ -42,26 +43,31 @@ function createTray(): void {
   tray = new Tray(trayIcon.resize({ width: 16, height: 16 }))
   tray.setToolTip('LightRain')
 
-  tray.setContextMenu(Menu.buildFromTemplate([
-    {
-      label: '显示窗口',
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show()
-          mainWindow.focus()
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: '显示窗口',
+        click: () => {
+          if (mainWindow) {
+            mainWindow.show()
+            mainWindow.focus()
+          }
+        }
+      },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: () => {
+          stopBackend()
+          if (tray) {
+            tray.destroy()
+            tray = null
+          }
+          app.quit()
         }
       }
-    },
-    { type: 'separator' },
-    {
-      label: '退出',
-      click: () => {
-        stopBackend()
-        if (tray) { tray.destroy(); tray = null }
-        app.quit()
-      }
-    }
-  ]))
+    ])
+  )
 
   tray.on('double-click', () => {
     if (mainWindow) {
@@ -74,7 +80,6 @@ function createTray(): void {
 // ─── 后端管理 ──────────────────────────────────────
 let backendProcess: ChildProcess | null = null
 let backendPort = 0
-const DEFAULT_PORT = 18080
 
 /** 检测端口是否可用 */
 function checkPort(port: number): Promise<boolean> {
@@ -112,7 +117,7 @@ async function startBackend(win: BrowserWindow): Promise<void> {
   }
 
   try {
-    backendPort = await findAvailablePort(DEFAULT_PORT)
+    backendPort = await findAvailablePort(DEFAULT_BACKEND_PORT)
   } catch {
     dialog.showErrorBox('端口不可用', '无法找到可用端口，请检查系统网络配置后重试。')
     return
@@ -122,7 +127,7 @@ async function startBackend(win: BrowserWindow): Promise<void> {
   const jarPath = join(process.resourcesPath, 'backend', 'light-rain-agent.jar')
 
   if (!existsSync(jarPath)) {
-    win.webContents.send('backend-ready', { port: DEFAULT_PORT, external: true })
+    win.webContents.send('backend-ready', { port: DEFAULT_BACKEND_PORT, external: true })
     return
   }
 
@@ -144,7 +149,7 @@ async function startBackend(win: BrowserWindow): Promise<void> {
 
   backendProcess.on('error', (err) => {
     console.error('[Backend] Failed to start:', err.message)
-    win.webContents.send('backend-ready', { port: DEFAULT_PORT, external: true })
+    win.webContents.send('backend-ready', { port: DEFAULT_BACKEND_PORT, external: true })
   })
 
   backendProcess.on('exit', (code) => {
@@ -199,7 +204,7 @@ function createWindow(): BrowserWindow {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true
     }
   })
 
@@ -208,7 +213,7 @@ function createWindow(): BrowserWindow {
     createTray()
     // 开发环境：通知渲染进程隐藏启动画面，但不改 baseURL（保留 Vite proxy）
     if (is.dev) {
-      win.webContents.send('backend-ready', { port: DEFAULT_PORT, dev: true })
+      win.webContents.send('backend-ready', { port: DEFAULT_BACKEND_PORT, dev: true })
     }
   })
 
@@ -236,8 +241,53 @@ function createWindow(): BrowserWindow {
 // ─── 应用生命周期 ──────────────────────────────────
 let isQuitting = false
 
+/** 主进程管理的全局快捷键：id -> accelerator */
+const registeredShortcuts = new Map<string, string>()
+
+/** 快捷键行为注册表：id -> 动作 */
+const shortcutActions = new Map<string, () => void>()
+
+/** 注册/更新全局快捷键（先注销旧的，注册失败时保留原键位并告警） */
+function registerGlobalShortcut(id: string, accelerator: string, action: () => void): void {
+  const old = registeredShortcuts.get(id)
+  if (old) {
+    globalShortcut.unregister(old)
+  }
+  const ok = globalShortcut.register(accelerator, action)
+  if (ok) {
+    registeredShortcuts.set(id, accelerator)
+  } else {
+    console.warn(`[Shortcut] 注册失败: ${id}=${accelerator}`)
+    // 注册失败时回滚旧键位
+    if (old) {
+      const rollback = globalShortcut.register(old, action)
+      if (rollback) registeredShortcuts.set(id, old)
+    }
+  }
+}
+
+/** 唤起主窗口 */
+function showMainWindow(): void {
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.jiuzhang.lightrain')
+
+  // 全局快捷键：唤起主窗口（可由设置页自定义）
+  shortcutActions.set('toggleWindow', showMainWindow)
+  registerGlobalShortcut('toggleWindow', 'CommandOrControl+Alt+L', showMainWindow)
+
+  // 渲染进程上报的自定义全局快捷键
+  ipcMain.on('shortcut-update', (_event, payload: { id: string; accelerator: string }) => {
+    const action = shortcutActions.get(payload?.id)
+    if (action && typeof payload?.accelerator === 'string' && payload.accelerator) {
+      registerGlobalShortcut(payload.id, payload.accelerator, action)
+    }
+  })
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -321,6 +371,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  globalShortcut.unregisterAll()
   stopBackend()
   isQuitting = true
 })

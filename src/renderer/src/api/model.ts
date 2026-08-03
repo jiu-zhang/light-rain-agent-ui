@@ -1,5 +1,11 @@
 import api from './index'
-import type { ApiResponse, AiModel, AiModelEnabled, AiModelList } from '@renderer/types'
+import type {
+  ApiResponse,
+  AiModel,
+  AiModelEnabled,
+  AiModelList,
+  ModelTestVO
+} from '@renderer/types'
 
 export const modelApi = {
   listEnabled(): Promise<ApiResponse<AiModelEnabled[]>> {
@@ -26,5 +32,9 @@ export const modelApi = {
 
   delete(id: number): Promise<ApiResponse<void>> {
     return api.delete(`/ai/models/${id}`).then((res) => res.data)
+  },
+
+  test(id: number): Promise<ApiResponse<ModelTestVO>> {
+    return api.post('/ai/models/test', null, { params: { modelId: id } }).then((res) => res.data)
   }
 }

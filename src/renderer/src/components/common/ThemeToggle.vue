@@ -1,25 +1,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getThemeMode, setThemeMode, type ThemeMode } from '@renderer/utils'
+import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
 
 const currentMode = ref<ThemeMode>('system')
 
-const themeOptions: { mode: ThemeMode; icon: string; label: string; gradient: string }[] = [
+const themeOptions: { mode: ThemeMode; icon: IconName; label: string; gradient: string }[] = [
   {
     mode: 'light',
-    icon: '☀️',
+    icon: 'sun',
     label: '浅色',
     gradient: 'linear-gradient(135deg, #fbbf24, #f97316)'
   },
   {
     mode: 'dark',
-    icon: '🌙',
+    icon: 'moon',
     label: '深色',
     gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)'
   },
   {
     mode: 'system',
-    icon: '🖥️',
+    icon: 'monitor',
     label: '跟随系统',
     gradient: 'linear-gradient(135deg, #06b6d4, #3b82f6)'
   }
@@ -45,7 +46,9 @@ onMounted(() => {
       :title="opt.label"
       @click="selectMode(opt.mode)"
     >
-      <span class="opt-icon" :style="{ background: opt.gradient }">{{ opt.icon }}</span>
+      <div class="opt-icon" :style="{ background: opt.gradient }">
+        <Icon :name="opt.icon" :size="13" />
+      </div>
     </button>
   </div>
 </template>
@@ -91,7 +94,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  color: white;
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -101,5 +104,6 @@ onMounted(() => {
 
 .theme-opt.active .opt-icon {
   background: white !important;
+  color: var(--accent-primary) !important;
 }
 </style>

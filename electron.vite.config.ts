@@ -2,6 +2,7 @@ import { resolve } from 'path'
 import { readFileSync } from 'fs'
 import { defineConfig } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
+import { DEFAULT_BACKEND_PORT } from './src/shared/constants'
 
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 
@@ -21,7 +22,7 @@ export default defineConfig({
     server: {
       proxy: {
         '/api': {
-          target: 'http://localhost:18080',
+          target: `http://localhost:${DEFAULT_BACKEND_PORT}`,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, '')
         }
