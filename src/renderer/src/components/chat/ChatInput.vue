@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { ProviderWithSimpleModels } from '@renderer/types'
+import Icon from '@renderer/components/common/Icon.vue'
 
 const MODEL_SEL_KEY = 'agent-ui-selected-model-id'
+const AGENT_MODE_KEY = 'agent-ui-agent-mode'
+const PLAN_MODE_KEY = 'agent-ui-plan-mode'
 
 const props = defineProps<{
   loading: boolean
@@ -16,13 +19,38 @@ const emit = defineEmits<{
 
 const inputText = ref('')
 const showModelPicker = ref(false)
-const agentMode = ref(false)
+const agentMode = ref(typeof localStorage !== 'undefined' && localStorage.getItem(AGENT_MODE_KEY) === '1')
+const planMode = ref(typeof localStorage !== 'undefined' && localStorage.getItem(PLAN_MODE_KEY) === '1')
 const selectedModelId = ref<number | null>(null)
 
 const enabledModels = computed(() =>
   props.enabledProviders.flatMap((p) =>
     (p.models || []).map((m) => ({ ...m, providerName: p.name }))
   )
+)
+
+/**
+ * 模型列表变化时自动选择模型：
+ * 当前选中仍有效 → 保留；否则恢复上次保存的选择 → 默认模型 → 第一个模型。
+ * 用 watch 而非父组件回调，避免 props 尚未下发的时序问题。
+ */
+watch(
+  enabledModels,
+  (models) => {
+    if (models.length === 0) {
+      selectedModelId.value = null
+      return
+    }
+    if (selectedModelId.value && models.some((m) => m.id === selectedModelId.value)) return
+    const savedId = localStorage.getItem(MODEL_SEL_KEY)
+    if (savedId && models.some((m) => m.id === Number(savedId))) {
+      selectedModelId.value = Number(savedId)
+      return
+    }
+    const defaultModel = models.find((m) => m.isDefault === 1)
+    selectedModelId.value = defaultModel?.id ?? models[0]?.id ?? null
+  },
+  { immediate: true }
 )
 
 const currentModelLabel = computed(() => {
@@ -34,6 +62,16 @@ function selectModel(id: number): void {
   selectedModelId.value = id
   localStorage.setItem(MODEL_SEL_KEY, String(id))
   showModelPicker.value = false
+}
+
+function toggleAgentMode(): void {
+  agentMode.value = !agentMode.value
+  localStorage.setItem(AGENT_MODE_KEY, agentMode.value ? '1' : '0')
+}
+
+function togglePlanMode(): void {
+  planMode.value = !planMode.value
+  localStorage.setItem(PLAN_MODE_KEY, planMode.value ? '1' : '0')
 }
 
 function handleSend(): void {
@@ -58,18 +96,8 @@ if (typeof document !== 'undefined') {
   document.addEventListener('click', onDocumentClick)
 }
 
-function loadSavedModel(): void {
-  const savedId = localStorage.getItem(MODEL_SEL_KEY)
-  const validId = savedId ? Number(savedId) : null
-  if (validId && enabledModels.value.some((m) => m.id === validId)) {
-    selectedModelId.value = validId
-  } else if (enabledModels.value.length > 0) {
-    selectedModelId.value = enabledModels.value[0].id
-  }
-}
-
 // 暴露给父组件调用
-defineExpose({ loadSavedModel, agentMode, selectedModelId })
+defineExpose({ agentMode, planMode, selectedModelId })
 </script>
 
 <template>
@@ -92,24 +120,26 @@ defineExpose({ loadSavedModel, agentMode, selectedModelId })
         :disabled="!inputText.trim()"
         @click="handleSend"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path d="M3.4 20.4L21 12L3.4 3.6L3 10.5L16 12L3 13.5L3.4 20.4Z" fill="currentColor" />
-        </svg>
+        <Icon name="send" :size="18" />
       </button>
       <button v-else class="send-btn stop-btn-send" @click="emit('stop')">
-        <div class="stop-icon-send" />
+        <Icon name="square" :size="14" />
       </button>
     </div>
     <div class="input-toolbar">
       <div class="toolbar-left">
-        <div class="toolbar-chip" :class="{ active: agentMode }" @click="agentMode = !agentMode">
+        <div class="toolbar-chip" :class="{ active: agentMode }" @click="toggleAgentMode">
           <div class="chip-track"><div class="chip-thumb" /></div>
           <span>{{ agentMode ? 'Agent' : 'Chat' }}</span>
         </div>
+        <div class="toolbar-chip" :class="{ active: planMode }" @click="togglePlanMode" title="按计划逐步执行任务">
+          <Icon name="git-branch" :size="12" class="chip-icon plan-icon" />
+          <span>{{ planMode ? '计划' : '普通' }}</span>
+        </div>
         <div class="toolbar-chip model-chip" :class="{ active: showModelPicker }" @click.stop="showModelPicker = !showModelPicker">
-          <span class="chip-dot" />
+          <Icon name="bot" :size="12" class="chip-icon" />
           <span>{{ currentModelLabel }}</span>
-          <span class="chip-arrow">▾</span>
+          <Icon name="chevron-down" :size="12" class="chip-arrow" />
           <div v-if="showModelPicker" class="toolbar-dropdown" @click.stop>
             <div v-for="p in enabledProviders" :key="p.id" class="dropdown-group">
               <div class="dropdown-group-label">{{ p.name }}</div>
@@ -120,7 +150,7 @@ defineExpose({ loadSavedModel, agentMode, selectedModelId })
                 :class="{ active: selectedModelId === m.id }"
                 @click="selectModel(m.id)"
               >
-                <span v-if="m.isDefault" class="dropdown-default">★</span>
+                <span v-if="m.isDefault" class="dropdown-default"><Icon name="star" :size="11" /></span>
                 {{ m.name }}
               </div>
             </div>
@@ -151,7 +181,6 @@ defineExpose({ loadSavedModel, agentMode, selectedModelId })
 .send-btn:disabled { cursor: not-allowed; }
 .stop-btn-send { background: var(--accent-error) !important; color: white !important; opacity: 0.9; }
 .stop-btn-send:hover { opacity: 1; transform: scale(1.05); }
-.stop-icon-send { width: 14px; height: 14px; background: white; border-radius: 3px; }
 .input-toolbar { max-width: 760px; margin: 8px auto 0; display: flex; align-items: center; justify-content: space-between; }
 .toolbar-left { display: flex; align-items: center; gap: 8px; }
 .toolbar-right { display: flex; align-items: center; }
@@ -162,9 +191,10 @@ defineExpose({ loadSavedModel, agentMode, selectedModelId })
 .toolbar-chip.active .chip-track { background: var(--accent-gradient); }
 .chip-thumb { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: var(--text-secondary); border-radius: 50%; transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .toolbar-chip.active .chip-thumb { transform: translateX(14px); background: white; box-shadow: 0 2px 6px rgba(96, 165, 250, 0.4); }
-.model-chip { position: relative; gap: 4px; max-width: 180px; }
-.chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-success); flex-shrink: 0; }
-.chip-arrow { font-size: 8px; color: var(--text-quaternary); flex-shrink: 0; transition: transform 0.2s; }
+.model-chip { position: relative; gap: 6px; max-width: 180px; }
+.chip-icon { color: var(--accent-success); flex-shrink: 0; }
+.plan-icon { color: var(--accent-primary); }
+.chip-arrow { color: var(--text-quaternary); flex-shrink: 0; transition: transform 0.2s; }
 .model-chip.active .chip-arrow { transform: rotate(180deg); }
 .toolbar-dropdown { position: absolute; bottom: calc(100% + 6px); left: 0; min-width: 200px; max-height: 300px; overflow-y: auto; background: var(--bg-elevated); backdrop-filter: blur(24px); border: 1px solid var(--border-strong); border-radius: 12px; padding: 6px; box-shadow: var(--shadow-glass-lg); z-index: 100; animation: dropdownIn 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
 @keyframes dropdownIn { from { opacity: 0; transform: translateY(4px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -174,7 +204,7 @@ defineExpose({ loadSavedModel, agentMode, selectedModelId })
 .dropdown-option { display: flex; align-items: center; gap: 6px; padding: 7px 10px; font-size: 13px; color: var(--text-secondary); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
 .dropdown-option:hover { background: color-mix(in srgb, var(--accent-primary) 8%, transparent); color: var(--text-primary); }
 .dropdown-option.active { background: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--accent-primary); font-weight: 600; }
-.dropdown-default { color: #fbbf24; font-size: 12px; }
+.dropdown-default { color: #fbbf24; display: flex; }
 .dropdown-empty { padding: 14px; text-align: center; font-size: 12px; color: var(--text-quaternary); }
 .toolbar-hint { font-size: 11px; color: var(--text-quaternary); }
 .hint-kbd { padding: 1px 5px; background: var(--bg-glass); border-radius: 4px; font-family: var(--font-code); font-size: 10px; color: var(--text-tertiary); }

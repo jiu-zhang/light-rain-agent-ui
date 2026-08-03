@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 type UpdateState = 'idle' | 'available' | 'downloading' | 'downloaded'
 
@@ -8,6 +8,9 @@ const currentVersion = ref('')
 const newVersion = ref('')
 const progress = ref(0)
 const visible = ref(false)
+let disposeUpdateAvailable: (() => void) | null = null
+let disposeUpdateProgress: (() => void) | null = null
+let disposeUpdateDownloaded: (() => void) | null = null
 
 function onUpdateAvailable(info: { currentVersion: string; version: string; releaseDate: string }): void {
   currentVersion.value = info.currentVersion
@@ -43,9 +46,15 @@ function postpone(): void {
 }
 
 onMounted(() => {
-  window.api.onUpdateAvailable(onUpdateAvailable)
-  window.api.onUpdateDownloadProgress(onDownloadProgress)
-  window.api.onUpdateDownloaded(onUpdateDownloaded)
+  disposeUpdateAvailable = window.api.onUpdateAvailable(onUpdateAvailable)
+  disposeUpdateProgress = window.api.onUpdateDownloadProgress(onDownloadProgress)
+  disposeUpdateDownloaded = window.api.onUpdateDownloaded(onUpdateDownloaded)
+})
+
+onUnmounted(() => {
+  disposeUpdateAvailable?.()
+  disposeUpdateProgress?.()
+  disposeUpdateDownloaded?.()
 })
 </script>
 

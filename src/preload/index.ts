@@ -1,47 +1,58 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 
-// Custom APIs for renderer
+// 自定义 IPC API：仅暴露必要通道，不暴露全量 electronAPI，缩小渲染进程攻击面
 const api = {
+  // 运行时版本信息（替代全量 electronAPI.process.versions）
+  versions: process.versions,
   // 自动更新
-  onUpdateAvailable: (callback: (info: { version: string; releaseDate: string }) => void) => {
-    ipcRenderer.on('update-available', (_event, info) => callback(info))
+  onUpdateAvailable: (
+    callback: (info: { currentVersion: string; version: string; releaseDate: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      info: { currentVersion: string; version: string; releaseDate: string }
+    ): void => callback(info)
+    ipcRenderer.on('update-available', listener)
+    return () => ipcRenderer.removeListener('update-available', listener)
   },
-  onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => {
-    ipcRenderer.on('update-download-progress', (_event, progress) => callback(progress))
+  onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: { percent: number }): void =>
+      callback(progress)
+    ipcRenderer.on('update-download-progress', listener)
+    return () => ipcRenderer.removeListener('update-download-progress', listener)
   },
-  onUpdateDownloaded: (callback: (info: { version: string }) => void) => {
-    ipcRenderer.on('update-downloaded', (_event, info) => callback(info))
+  onUpdateDownloaded: (callback: (info: { version: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, info: { version: string }): void =>
+      callback(info)
+    ipcRenderer.on('update-downloaded', listener)
+    return () => ipcRenderer.removeListener('update-downloaded', listener)
   },
-  startUpdateDownload: () => ipcRenderer.send('start-update-download'),
-  restartAndInstall: () => ipcRenderer.send('restart-and-install'),
+  startUpdateDownload: (): void => ipcRenderer.send('start-update-download'),
+  restartAndInstall: (): void => ipcRenderer.send('restart-and-install'),
   // 后端
-  onBackendReady: (callback: (info: { port: number; external?: boolean }) => void) => {
-    ipcRenderer.on('backend-ready', (_event, info) => callback(info))
+  onBackendReady: (
+    callback: (info: { port: number; dev?: boolean; external?: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      info: { port: number; dev?: boolean; external?: boolean }
+    ): void => callback(info)
+    ipcRenderer.on('backend-ready', listener)
+    return () => ipcRenderer.removeListener('backend-ready', listener)
   },
   // 关闭确认弹窗
-  onConfirmClose: (callback: () => void) => {
-    ipcRenderer.on('confirm-close', () => callback())
+  onConfirmClose: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('confirm-close', listener)
+    return () => ipcRenderer.removeListener('confirm-close', listener)
   },
-  closeApp: () => ipcRenderer.send('close-app'),
-  hideToTray: () => ipcRenderer.send('hide-to-tray'),
+  closeApp: (): void => ipcRenderer.send('close-app'),
+  hideToTray: (): void => ipcRenderer.send('hide-to-tray'),
   // 退出应用
-  quitApp: () => ipcRenderer.send('quit-app')
+  quitApp: (): void => ipcRenderer.send('quit-app'),
+  // 快捷键：更新主进程注册的全局快捷键
+  updateShortcut: (id: string, accelerator: string): void =>
+    ipcRenderer.send('shortcut-update', { id, accelerator })
 }
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
-  }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
-}
+contextBridge.exposeInMainWorld('api', api)

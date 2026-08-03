@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 const visible = ref(false)
+let disposeConfirmClose: (() => void) | null = null
 
 function show(): void {
   visible.value = true
@@ -22,7 +23,11 @@ function cancel(): void {
 }
 
 onMounted(() => {
-  window.api.onConfirmClose(() => show())
+  disposeConfirmClose = window.api.onConfirmClose(() => show())
+})
+
+onUnmounted(() => {
+  disposeConfirmClose?.()
 })
 </script>
 

@@ -70,6 +70,22 @@ export const chatApi = {
                     case 'STATUS':
                       callbacks.onStatus?.(event.content || '')
                       break
+                    case 'PLAN_START':
+                      callbacks.onPlanStart?.(event.content || '')
+                      break
+                    case 'PLAN_STEP':
+                      callbacks.onPlanStep?.(event.content || '')
+                      break
+                    case 'PLAN_DONE':
+                      callbacks.onPlanDone?.(event.content || '')
+                      break
+                    case 'INPUT_REQUEST':
+                      try {
+                        callbacks.onInputRequest?.(JSON.parse(event.content || '{}'))
+                      } catch {
+                        // 忽略非法负载
+                      }
+                      break
                     case 'DONE':
                       callbacks.onDone?.()
                       break
@@ -86,6 +102,9 @@ export const chatApi = {
         } catch (err: unknown) {
           if (err instanceof Error && err.name === 'AbortError') return
           callbacks.onError?.(String(err))
+        } finally {
+          // 流结束后清理 abort controller，避免 Map 无限增长
+          abortControllers.delete(request.sessionId)
         }
       })
       .catch((err: unknown) => {
@@ -103,6 +122,13 @@ export const chatApi = {
       abortControllers.delete(sessionId)
     }
     await api.post(`/ai/chat/interrupt/${sessionId}`).then((res) => res.data)
+  },
+
+  /** 提交 Agent 执行过程中的用户交互输入 */
+  submitInput(sessionId: string, requestId: string, value: string): Promise<ApiResponse<void>> {
+    return api
+      .post(`/ai/chat/${sessionId}/input`, { requestId, value })
+      .then((res) => res.data)
   },
 
   listSessions(): Promise<ApiResponse<Session[]>> {
@@ -123,6 +149,14 @@ export const chatApi = {
 
   deleteSession(sessionId: string): Promise<ApiResponse<void>> {
     return api.delete(`/ai/sessions/${sessionId}`).then((res) => res.data)
+  },
+
+  renameSession(sessionId: string, title: string): Promise<ApiResponse<void>> {
+    return api.put(`/ai/sessions/${sessionId}`, { title }).then((res) => res.data)
+  },
+
+  deleteLastAssistant(sessionId: string): Promise<ApiResponse<void>> {
+    return api.delete(`/ai/sessions/${sessionId}/messages/last-assistant`).then((res) => res.data)
   },
 
   generateId(): Promise<ApiResponse<string>> {

@@ -61,3 +61,26 @@ export function generateId(length = 8): string {
     .toString(36)
     .substring(2, 2 + length)
 }
+
+/**
+ * 下载文本文件（浏览器端 Blob 方式）
+ *
+ * @param filename 文件名（含扩展名）
+ * @param content 文本内容
+ * @param mime MIME 类型
+ */
+export function downloadTextFile(
+  filename: string,
+  content: string,
+  mime = 'text/plain;charset=utf-8'
+): void {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}

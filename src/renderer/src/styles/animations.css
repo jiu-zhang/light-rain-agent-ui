@@ -1,111 +1,299 @@
-/* ==================== 科技感动画 ==================== */
+/* ==================== 科技感动效系统 ==================== */
 
 /* ---- 进入动画 ---- */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-30px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* ---- 错峰进入：用于列表项依次出现 ---- */
+@keyframes staggerIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* ---- 加载动画 ---- */
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.95); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-@keyframes typing {
-  from { width: 0; }
-  to { width: 100%; }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
-/* ---- 霓虹光效 ---- */
-@keyframes neonPulse {
-  0%, 100% {
-    text-shadow: 0 0 5px var(--neon-cyan), 0 0 10px var(--neon-cyan);
+/* ---- 科技感辉光脉冲：用于激活/在线状态 ---- */
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-primary-rgb), 0.45);
   }
   50% {
-    text-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan);
+    box-shadow: 0 0 0 6px rgba(var(--accent-primary-rgb), 0);
   }
 }
 
-@keyframes glowBorder {
-  0%, 100% {
-    border-color: var(--border-glass);
-    box-shadow: 0 0 5px transparent;
+/* 状态点呼吸：成功/在线指示 */
+@keyframes dotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-success-rgb), 0.5);
   }
   50% {
-    border-color: var(--accent-primary);
-    box-shadow: var(--shadow-glow);
+    box-shadow: 0 0 0 5px rgba(var(--accent-success-rgb), 0);
   }
 }
 
+@keyframes dotPulseError {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-error-rgb), 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(var(--accent-error-rgb), 0);
+  }
+}
+
+/* ---- 边框追光：用于卡片/面板 hover 时的科技描边 ---- */
+@keyframes borderTrace {
+  0% {
+    background-position: -150% 0;
+  }
+  100% {
+    background-position: 250% 0;
+  }
+}
+
+/* ---- 渐变流动：用于强调标题/进度条 ---- */
 @keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
+/* ---- 微光扫掠：用于骨架/加载占位 ---- */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
+/* ---- 波纹扩散：用于按钮点击反馈 ---- */
 @keyframes ripple {
-  0% { transform: scale(0); opacity: 0.5; }
-  100% { transform: scale(4); opacity: 0; }
+  0% {
+    transform: scale(0);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
 }
 
-/* ---- 粒子背景 ---- */
-@keyframes particleFloat {
-  0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+/* ---- 扫描线：用于顶部装饰条 ---- */
+@keyframes scanLine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
-/* ---- 工具类 ---- */
-.fade-in { animation: fadeIn 0.3s ease-out; }
-.slide-up { animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.scale-in { animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.float { animation: float 3s ease-in-out infinite; }
-.neon-pulse { animation: neonPulse 2s ease-in-out infinite; }
-.glow-border { animation: glowBorder 2s ease-in-out infinite; }
+/* ---- 模态/浮层进入 ---- */
+@keyframes modalOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ==================== 工具类 ==================== */
+
+.fade-in {
+  animation: fadeIn var(--transition-normal);
+}
+.slide-up {
+  animation: slideUp 0.4s var(--ease-spring);
+}
+.slide-down {
+  animation: slideDown 0.4s var(--ease-spring);
+}
+.scale-in {
+  animation: scaleIn 0.3s var(--ease-spring);
+}
+.float {
+  animation: float 3.5s ease-in-out infinite;
+}
+
+/* 列表错峰进入：在父级设置，子项用 --i 控制延迟 */
+.stagger-list > * {
+  animation: staggerIn 0.4s var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* 状态点呼吸 */
+.dot-pulse {
+  animation: dotPulse 2s ease-out infinite;
+}
+.dot-pulse-error {
+  animation: dotPulseError 2s ease-out infinite;
+}
+
+/* 激活态辉光脉冲 */
+.glow-pulse {
+  animation: glowPulse 2.2s ease-out infinite;
+}
+
+/* 流动渐变文本/背景 */
+.gradient-flow {
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+}
+
+/* 微光扫掠占位 */
 .shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 100%
+  );
   background-size: 200% 100%;
-  animation: shimmer 2s infinite;
+  animation: shimmer 1.8s infinite;
+}
+
+/* 通用 spinner */
+.spin {
+  animation: spin 0.8s linear infinite;
 }

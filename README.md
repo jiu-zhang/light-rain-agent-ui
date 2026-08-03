@@ -59,3 +59,5 @@ git push origin master --tags
 ### 自动更新
 
 应用内置 `electron-updater`，以 GitHub Releases 作为更新源。用户安装应用后，后续发布新版本时会自动静默下载并安装，无需手动操作。
+
+可以添加几种模式，让用户选择，把一些需要经常操作的功能放到一起
