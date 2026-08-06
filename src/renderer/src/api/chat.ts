@@ -1,6 +1,7 @@
 import api from './index'
 import type {
   ApiResponse,
+  Attachment,
   ChatRequest,
   Session,
   ChatMessage,
@@ -12,9 +13,37 @@ import type {
 const abortControllers = new Map<string, AbortController>()
 
 export const chatApi = {
+  /**
+   * 上传聊天附件（图片等文件），返回附件描述（fileId 供对话引用）
+   */
+  async uploadAttachment(file: File): Promise<Attachment> {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`${api.defaults.baseURL}/ai/chat/upload`, {
+      method: 'POST',
+      body: form
+    })
+    if (!res.ok) {
+      throw new Error(`上传失败 (HTTP ${res.status})`)
+    }
+    let data: ApiResponse<Attachment>
+    try {
+      data = (await res.json()) as ApiResponse<Attachment>
+    } catch {
+      throw new Error('上传响应解析失败')
+    }
+    if (data.code !== 200) {
+      throw new Error(data.message || '上传失败')
+    }
+    return data.data as Attachment
+  },
+
   chat(request: ChatRequest, callbacks: SSECallbacks): AbortController {
     const controller = new AbortController()
     abortControllers.set(request.sessionId, controller)
+    // DONE/ERROR 是否已送达：用于判断流异常关闭时是否需要兜底清理 loading 状态
+    let settled = false
+    let aborted = false
 
     fetch(`${api.defaults.baseURL}/ai/chat`, {
       method: 'POST',
@@ -24,12 +53,14 @@ export const chatApi = {
     })
       .then(async (response) => {
         if (!response.ok) {
+          settled = true
           callbacks.onError?.(`HTTP ${response.status}: ${response.statusText}`)
           return
         }
 
         const reader = response.body?.getReader()
         if (!reader) {
+          settled = true
           callbacks.onError?.('响应体不可读')
           return
         }
@@ -70,6 +101,9 @@ export const chatApi = {
                     case 'STATUS':
                       callbacks.onStatus?.(event.content || '')
                       break
+                    case 'NOTICE':
+                      callbacks.onNotice?.(event.content || '')
+                      break
                     case 'PLAN_START':
                       callbacks.onPlanStart?.(event.content || '')
                       break
@@ -87,9 +121,11 @@ export const chatApi = {
                       }
                       break
                     case 'DONE':
+                      settled = true
                       callbacks.onDone?.()
                       break
                     case 'ERROR':
+                      settled = true
                       callbacks.onError?.(event.error || event.content || '未知错误')
                       break
                   }
@@ -100,39 +136,48 @@ export const chatApi = {
             }
           }
         } catch (err: unknown) {
-          if (err instanceof Error && err.name === 'AbortError') return
+          if (err instanceof Error && err.name === 'AbortError') {
+            aborted = true
+            return
+          }
+          settled = true
           callbacks.onError?.(String(err))
         } finally {
           // 流结束后清理 abort controller，避免 Map 无限增长
           abortControllers.delete(request.sessionId)
+          // 服务端在未发 DONE/ERROR 的情况下关闭了流（如客户端断开重连等）：
+          // 兜底触发 onDone，避免 loading 状态卡死整个 UI
+          if (!aborted && !settled) callbacks.onDone?.()
         }
       })
       .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') {
+          aborted = true
+          return
+        }
+        settled = true
         callbacks.onError?.(String(err))
       })
 
     return controller
   },
 
+  /** 通知后端中断当前 Agent/计划执行（SSE 中断由调用方主动 abort） */
   async interrupt(sessionId: string): Promise<void> {
-    const controller = abortControllers.get(sessionId)
-    if (controller) {
-      controller.abort()
-      abortControllers.delete(sessionId)
-    }
     await api.post(`/ai/chat/interrupt/${sessionId}`).then((res) => res.data)
   },
 
   /** 提交 Agent 执行过程中的用户交互输入 */
   submitInput(sessionId: string, requestId: string, value: string): Promise<ApiResponse<void>> {
-    return api
-      .post(`/ai/chat/${sessionId}/input`, { requestId, value })
-      .then((res) => res.data)
+    return api.post(`/ai/chat/${sessionId}/input`, { requestId, value }).then((res) => res.data)
   },
 
   listSessions(): Promise<ApiResponse<Session[]>> {
     return api.get('/ai/sessions').then((res) => res.data)
+  },
+
+  listSessionsPage(pageNum: number, pageSize: number): Promise<ApiResponse<PageResult<Session>>> {
+    return api.get('/ai/sessions/page', { params: { pageNum, pageSize } }).then((res) => res.data)
   },
 
   getSession(sessionId: string): Promise<ApiResponse<Session>> {
@@ -142,7 +187,7 @@ export const chatApi = {
   getMessages(query: MessageQuery): Promise<ApiResponse<PageResult<ChatMessage>>> {
     return api
       .get(`/ai/sessions/${query.sessionId}/messages`, {
-        params: { page: query.page, size: query.size }
+        params: { pageNum: query.pageNum, pageSize: query.pageSize }
       })
       .then((res) => res.data)
   },

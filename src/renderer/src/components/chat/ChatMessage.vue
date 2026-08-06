@@ -1,188 +1,161 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
-import hljs from 'highlight.js'
-import { closeOpenCodeBlock } from '@renderer/utils'
-import type { ChatEvent } from '@renderer/types'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { attachmentUrl, localAttachmentUrl } from '@renderer/api'
+import { notifyError, notifyInfo, notifySuccess } from '@renderer/utils/feedback'
+import type { Attachment, ChatTurn, PlanStep } from '@renderer/types'
 import Icon from '@renderer/components/common/Icon.vue'
+import MarkdownContent from './blocks/MarkdownContent.vue'
+import PlanTimeline from './blocks/PlanTimeline.vue'
+import ReasoningBlock from './blocks/ReasoningBlock.vue'
+import ToolCard from './blocks/ToolCard.vue'
 
 const props = defineProps<{
-  event: ChatEvent
-  /** 是否为当前正在流式输出的消息（显示闪烁光标） */
+  /** 一轮对话（用户提问或一次完整的 AI 回复） */
+  turn: ChatTurn
+  /** 是否为当前正在流式输出的 AI 回复 */
   streaming?: boolean
 }>()
 
 const emit = defineEmits<{ regenerate: [] }>()
 
-// 配置 marked 选项 + 代码块语法高亮
-marked.setOptions({
-  breaks: true,
-  gfm: true
+const isUser = computed(() => props.turn.role === 'user')
+
+const isError = computed(() => !isUser.value && !!props.turn.error)
+
+/** 当前消息是否可重新生成（已完成且有正文的 AI 回复） */
+const canRegenerate = computed(
+  () =>
+    !isUser.value &&
+    !props.streaming &&
+    props.turn.events.some((e) => e.type === 'CONTENT' && e.content)
+)
+
+/** 附件是否为图片（用于缩略图展示） */
+function isImageAttachment(att: Attachment): boolean {
+  if (att.mimeType) return att.mimeType.startsWith('image/')
+  return /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(att.name)
+}
+
+/** 图片预览（轻量灯箱） */
+const lightboxUrl = ref<string | null>(null)
+function openLightbox(url: string): void {
+  lightboxUrl.value = url
+}
+function closeLightbox(): void {
+  lightboxUrl.value = null
+}
+
+/** 正在流式输出的正文事件 uid（用于定位光标） */
+const streamingContentUid = computed(() => {
+  if (!props.streaming || isUser.value) return ''
+  const evts = props.turn.events
+  for (let i = evts.length - 1; i >= 0; i--) {
+    const e = evts[i]
+    if (e.type === 'CONTENT' && e.content) return e.uid
+  }
+  return ''
 })
 
-marked.use({
-  renderer: {
-    code({ text, lang }: { text: string; lang?: string }) {
-      const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext'
-      let highlighted: string
-      try {
-        highlighted =
-          language === 'plaintext'
-            ? hljs.highlightAuto(text).value
-            : hljs.highlight(text, { language, ignoreIllegals: true }).value
-      } catch {
-        highlighted = hljs.highlightAuto(text).value
-      }
-      return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`
+/** 思考块展开状态：只记录用户手动切换；默认流式中展开、完成后闭合 */
+const reasoningOpen = ref<Record<string, boolean>>({})
+
+function isReasoningOpen(uid: string): boolean {
+  return reasoningOpen.value[uid] ?? props.streaming
+}
+
+function toggleReasoning(uid: string): void {
+  reasoningOpen.value[uid] = !isReasoningOpen(uid)
+}
+
+// 输出完成后默认闭合所有思考块，用户可手动展开
+watch(
+  () => props.streaming,
+  (now, prev) => {
+    if (prev === true && now === false) {
+      for (const key of Object.keys(reasoningOpen.value)) reasoningOpen.value[key] = false
     }
   }
-})
-
-const isUser = computed(() => props.event.role === 'user')
-
-/** 当前消息是否可重新生成（最后一条 AI 回复） */
-const canRegenerate = computed(
-  () => props.event.role === 'assistant' && props.event.type === 'CONTENT'
 )
 
-// 按内容缓存渲染结果，流式重渲染时避免重复解析相同内容；上限 200 条防内存膨胀
-const renderCache = new Map<string, string>()
-const MAX_RENDER_CACHE = 200
-
-const contentRef = ref<HTMLElement | null>(null)
-
-const renderedContent = computed(() => {
-  const content = props.event.content
-  if (!content) return ''
-  const cached = renderCache.get(content)
-  if (cached !== undefined) return cached
-  try {
-    // 先补齐未闭合代码块，保证每次传给 marked 的都是结构完整的内容
-    const sanitized = closeOpenCodeBlock(content)
-    // marked 不提供净化能力，AI 输出可能携带恶意 HTML，渲染前必须用 DOMPurify 消毒
-    const html = DOMPurify.sanitize(marked.parse(sanitized) as string)
-    if (renderCache.size >= MAX_RENDER_CACHE) renderCache.clear()
-    renderCache.set(content, html)
-    // 流式输出时在末尾追加闪烁光标（cursor 为自研 span，净化后拼接，无注入风险）
-    return props.streaming && !isUser.value ? html + '<span class="stream-cursor"></span>' : html
-  } catch {
-    return content
-  }
-})
-
-// 渲染完成后为代码块挂载"复制"按钮（幂等，流式更新不会重复添加）
-watch(
-  renderedContent,
-  () => {
-    nextTick(() => {
-      const root = contentRef.value
-      if (!root) return
-      root.querySelectorAll('pre').forEach((pre) => {
-        if (pre.querySelector('.copy-btn')) return
-        const code = pre.querySelector('code')
-        if (!code) return
-        const btn = document.createElement('button')
-        btn.className = 'copy-btn'
-        btn.textContent = '复制'
-        btn.addEventListener('click', () => {
-          const text = code.textContent ?? ''
-          navigator.clipboard
-            .writeText(text)
-            .then(() => {
-              btn.textContent = '已复制'
-              setTimeout(() => (btn.textContent = '复制'), 1500)
-            })
-            .catch(() => (btn.textContent = '复制失败'))
-        })
-        pre.appendChild(btn)
-      })
-    })
-  },
-  { flush: 'post' }
+/** 是否有思考内容 */
+const hasReasoning = computed(() =>
+  props.turn.events.some((e) => e.type === 'REASONING' && e.content)
 )
 
-const config = computed(() => {
-  if (props.event.type === 'ERROR') {
-    return { icon: 'alert-circle', label: '错误' }
+/** 思考计时（秒）：流式输出中递增，完成后定格（参考 DeepSeek「深度思考用时」） */
+const reasoningElapsed = ref(0)
+let elapsedStart = 0
+let elapsedTimer: ReturnType<typeof setInterval> | undefined
+
+function startElapsed(): void {
+  if (elapsedTimer) return
+  elapsedStart = Date.now()
+  reasoningElapsed.value = 0
+  elapsedTimer = setInterval(() => {
+    reasoningElapsed.value = Math.floor((Date.now() - elapsedStart) / 1000)
+  }, 500)
+}
+function stopElapsed(): void {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer)
+    elapsedTimer = undefined
   }
-  if (isUser.value) {
-    return { icon: 'user', label: '你' }
-  }
-  switch (props.event.type) {
-    case 'CONTENT':
-      return { icon: 'bot', label: 'AI' }
-    case 'REASONING':
-      return { icon: 'brain', label: '思考' }
-    case 'TOOL_CALL':
-      return { icon: 'zap', label: '调用工具' }
-    case 'TOOL_CONTENT':
-      return { icon: 'check', label: '工具结果' }
-    case 'PLAN_START':
-      return { icon: 'list', label: '计划开始' }
-    case 'PLAN_STEP':
-      return { icon: 'play-circle', label: '计划步骤' }
-    case 'PLAN_DONE':
-      return { icon: 'check-circle', label: '计划完成' }
-    case 'STATUS':
-      return { icon: 'circle', label: '' }
-    default:
-      return { icon: 'circle', label: props.event.type }
-  }
+}
+
+watch([() => props.streaming, hasReasoning], ([streaming, has]) => {
+  if (streaming && has) startElapsed()
+  else stopElapsed()
+})
+onBeforeUnmount(() => {
+  stopElapsed()
+  if (copyTimer) clearTimeout(copyTimer)
 })
 
-/** 工具调用信息（TOOL_CALL） */
-const toolCallInfo = computed(() => {
-  if (props.event.type !== 'TOOL_CALL' || !props.event.content) return null
-  try {
-    const p = JSON.parse(props.event.content)
-    const args = p.arguments
-    const argsText = typeof args === 'string' ? args : args ? JSON.stringify(args, null, 2) : ''
-    return { name: p.name || 'tool', args: argsText }
-  } catch {
-    return null
-  }
-})
+const aiIcon = computed<'bot' | 'alert-triangle'>(() => (isError.value ? 'alert-triangle' : 'bot'))
 
-const toolCallName = computed(() => toolCallInfo.value?.name ?? '工具调用')
-const toolCallArgs = computed(() => toolCallInfo.value?.args ?? props.event.content ?? '')
+/** 工具卡片展开/收起 */
+const expanded = ref<Record<string, boolean>>({})
+function isExpanded(uid: string): boolean {
+  return expanded.value[uid] ?? false
+}
+function toggleExpanded(uid: string): void {
+  expanded.value[uid] = !isExpanded(uid)
+}
 
-/** 工具结果信息（TOOL_CONTENT） */
-const toolContentInfo = computed(() => {
-  if (props.event.type !== 'TOOL_CONTENT' || !props.event.content) return null
-  try {
-    const p = JSON.parse(props.event.content)
-    const data = p.responseData !== undefined ? p.responseData : p
-    const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
-    return { name: p.name || 'tool', result: text }
-  } catch {
-    return null
-  }
-})
+interface PlanStartInfo {
+  goal: string
+  totalSteps: number
+  steps: PlanStep[]
+}
 
 /** 计划开始信息（PLAN_START） */
-const planStartInfo = computed(() => {
-  if (props.event.type !== 'PLAN_START' || !props.event.content) return null
+function planStartInfo(evt: { content?: string }): PlanStartInfo | null {
+  if (!evt.content) return null
   try {
-    const plan = JSON.parse(props.event.content)
+    const plan = JSON.parse(evt.content)
     return {
-      planId: plan.planId,
       goal: plan.goal,
       totalSteps: plan.totalSteps,
-      steps: plan.steps || []
+      steps: (plan.steps || []) as PlanStep[]
     }
   } catch {
     return null
   }
-})
+}
+
+interface PlanStepInfo {
+  index: number
+  name: string
+  status: string
+  error?: string
+}
 
 /** 计划步骤信息（PLAN_STEP） */
-const planStepInfo = computed(() => {
-  if (props.event.type !== 'PLAN_STEP' || !props.event.content) return null
+function planStepInfo(evt: { content?: string }): PlanStepInfo | null {
+  if (!evt.content) return null
   try {
-    const step = JSON.parse(props.event.content)
+    const step = JSON.parse(evt.content)
     return {
-      planId: step.planId,
       index: step.index,
       name: step.name,
       status: step.status,
@@ -191,61 +164,147 @@ const planStepInfo = computed(() => {
   } catch {
     return null
   }
+}
+
+interface PlanStepView {
+  index: number
+  name: string
+  status: string
+  error?: string
+}
+
+/**
+ * 聚合 PLAN_START / PLAN_STEP / PLAN_DONE 为单一计划时间线：
+ * 以 PLAN_START 的步骤列表为骨架，叠加后续步骤状态更新，完成后统一置为已完成。
+ */
+const planView = computed<{
+  goal: string
+  total: number
+  completed: number
+  percent: number
+  steps: PlanStepView[]
+} | null>(() => {
+  const evts = props.turn.events
+  const startEvt = evts.find((e) => e.type === 'PLAN_START')
+  const start = startEvt ? planStartInfo(startEvt) : null
+  if (!start) return null
+  const steps: PlanStepView[] = (start.steps || []).map((s, i) => ({
+    index: i + 1,
+    name: s.name,
+    status: 'RUNNING'
+  }))
+  for (const e of evts) {
+    if (e.type !== 'PLAN_STEP') continue
+    const info = planStepInfo(e)
+    if (!info) continue
+    const st = steps.find((s) => s.index === info.index)
+    if (st) {
+      st.status = info.status
+      if (info.error) st.error = info.error
+    }
+  }
+  if (evts.some((e) => e.type === 'PLAN_DONE')) {
+    for (const s of steps) if (s.status === 'RUNNING') s.status = 'COMPLETED'
+  }
+  const completed = steps.filter((s) => s.status === 'COMPLETED').length
+  return {
+    goal: start.goal || '',
+    total: steps.length,
+    completed,
+    percent: steps.length ? Math.round((completed / steps.length) * 100) : 0,
+    steps
+  }
 })
 
-const toolContentName = computed(() => toolContentInfo.value?.name ?? '工具结果')
-const toolContentResult = computed(() => toolContentInfo.value?.result ?? props.event.content ?? '')
+/** 计划是否仍在执行中（存在运行中的步骤） */
+const planActive = computed(
+  () => planView.value?.steps.some((s) => s.status === 'RUNNING') ?? false
+)
 
-/** 工具卡片展开/收起 */
-const expanded = ref(false)
+/** 剔除已被计划时间线消费的 PLAN_STEP / PLAN_DONE 事件 */
+const renderableEvents = computed(() =>
+  props.turn.events.filter((e) => e.type !== 'PLAN_STEP' && e.type !== 'PLAN_DONE')
+)
 
-/** 获取计划状态文本 */
-function getStatusText(status: string): string {
-  switch (status) {
-    case 'RUNNING': return '执行中'
-    case 'COMPLETED': return '已完成'
-    case 'CANCELLED': return '已取消'
-    case 'FAILED': return '失败'
-    default: return status
-  }
+/** 可复制文本：用户消息取原文，AI 回复取思考+正文 */
+const copyableText = computed(() => {
+  if (isUser.value) return props.turn.content ?? ''
+  return props.turn.events
+    .filter((e) => (e.type === 'CONTENT' || e.type === 'REASONING') && e.content)
+    .map((e) => e.content)
+    .join('\n\n')
+})
+
+/** 复制按钮的"已复制"反馈状态 */
+const copied = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | undefined
+
+function setCopiedFeedback(): void {
+  copied.value = true
+  if (copyTimer) clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => (copied.value = false), 1500)
 }
 
-/** 复制消息内容 */
+/** 复制消息内容（带成功/失败反馈） */
 async function copyContent(): Promise<void> {
-  const text = props.event.content ?? props.event.error ?? ''
+  const text = props.turn.error || copyableText.value
   try {
     await navigator.clipboard.writeText(text)
+    setCopiedFeedback()
+    notifySuccess('已复制到剪贴板')
   } catch {
     // clipboard API 不可用时回退到 execCommand
-    const ta = document.createElement('textarea')
-    ta.value = text
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    ta.remove()
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      ta.remove()
+      if (ok) {
+        setCopiedFeedback()
+        notifySuccess('已复制到剪贴板')
+        return
+      }
+    } catch {
+      // 忽略 execCommand 异常，统一走失败提示
+    }
+    notifyError('复制失败，请手动选择内容复制')
   }
 }
+
+/** 重新生成按钮的防重复点击状态 */
+const regenerating = ref(false)
+
+function onRegenerate(): void {
+  if (regenerating.value) return
+  regenerating.value = true
+  notifyInfo('正在重新生成，请稍候…')
+  emit('regenerate')
+}
+
+// 重新生成完成后（streaming 结束）复位按钮状态
+watch(
+  () => props.streaming,
+  (now, prev) => {
+    if (prev === true && now === false) regenerating.value = false
+  }
+)
 </script>
 
 <template>
   <div
     class="msg-row"
-    :data-uid="event.uid"
+    :data-uid="turn.uid"
     :class="{
       'is-user': isUser,
-      'is-ai': !isUser && event.type === 'CONTENT',
-      'is-reasoning': event.type === 'REASONING',
-      'is-tool': event.type === 'TOOL_CALL' || event.type === 'TOOL_CONTENT',
-      'is-plan-start': event.type === 'PLAN_START',
-      'is-plan-step': event.type === 'PLAN_STEP',
-      'is-plan-done': event.type === 'PLAN_DONE',
-      'is-status': event.type === 'STATUS',
-      'is-error': event.type === 'ERROR'
+      'is-ai': !isUser && !isError,
+      'is-error': isError
     }"
   >
     <!-- AI 头像（左侧） -->
     <div v-if="!isUser" class="msg-avatar">
-      <Icon :name="config.icon as any" :size="14" />
+      <Icon :name="aiIcon" :size="14" />
     </div>
 
     <!-- 空白占位（用户消息右侧头像用） -->
@@ -254,94 +313,148 @@ async function copyContent(): Promise<void> {
     <!-- 气泡 + 操作按钮（纵向列布局） -->
     <div class="msg-col">
       <div class="msg-bubble">
-        <!-- 工具调用：结构化卡片 -->
-        <div v-if="event.type === 'TOOL_CALL'" class="tool-card">
-          <div class="tool-card-header" @click="expanded = !expanded">
-            <Icon name="zap" :size="12" class="tool-icon" />
-            <span class="tool-name">{{ toolCallName }}</span>
-            <span class="tool-toggle">{{ expanded ? '收起' : '查看参数' }}</span>
-          </div>
-          <pre v-if="expanded" class="tool-detail">{{ toolCallArgs }}</pre>
-        </div>
-        <!-- 工具结果：结构化卡片 -->
-        <div v-else-if="event.type === 'TOOL_CONTENT'" class="tool-card tool-result">
-          <div class="tool-card-header" @click="expanded = !expanded">
-            <Icon name="check-circle" :size="12" class="tool-icon" />
-            <span class="tool-name">{{ toolContentName }}</span>
-            <span class="tool-toggle">{{ expanded ? '收起' : '查看结果' }}</span>
-          </div>
-          <pre v-if="expanded" class="tool-detail">{{ toolContentResult }}</pre>
-        </div>
-        <!-- 计划开始：结构化展示 -->
-        <div v-else-if="event.type === 'PLAN_START' && planStartInfo" class="plan-card plan-start">
-          <div class="plan-card-header">
-            <Icon name="list" :size="12" class="plan-icon" />
-            <span class="plan-title">计划启动</span>
-            <span class="plan-steps">共 {{ planStartInfo.totalSteps }} 步</span>
-          </div>
-          <div class="plan-goal">{{ planStartInfo.goal }}</div>
-          <div class="plan-steps-list">
-            <div v-for="(step, index) in planStartInfo.steps" :key="index" class="plan-step-item">
-              <span class="step-number">{{ index + 1 }}</span>
-              <span class="step-name">{{ step.name }}</span>
+        <!-- 用户消息：附件 + 正文 -->
+        <template v-if="isUser">
+          <div v-if="turn.attachments?.length" class="msg-attachments">
+            <div
+              v-for="att in turn.attachments"
+              :key="att.fileId || att.localPath"
+              class="msg-attach-item"
+              :class="{ 'is-image': isImageAttachment(att) }"
+              :title="att.name"
+            >
+              <img
+                v-if="isImageAttachment(att)"
+                :src="att.localPath ? localAttachmentUrl(att.localPath) : attachmentUrl(att.fileId)"
+                :alt="att.name"
+                class="msg-attach-img"
+                loading="lazy"
+                @click.stop="
+                  openLightbox(
+                    att.localPath ? localAttachmentUrl(att.localPath) : attachmentUrl(att.fileId)
+                  )
+                "
+              />
+              <div v-else class="msg-attach-file">
+                <Icon name="file" :size="14" />
+                <span class="msg-attach-file-name">{{ att.name }}</span>
+              </div>
             </div>
           </div>
-        </div>
-        <!-- 计划步骤：状态展示 -->
-        <div v-else-if="event.type === 'PLAN_STEP' && planStepInfo" class="plan-card plan-step">
-          <div class="plan-card-header">
-            <Icon name="play-circle" :size="12" class="plan-icon" />
-            <span class="plan-title">步骤 {{ planStepInfo.index }}</span>
-            <span class="plan-status" :class="planStepInfo.status.toLowerCase()">
-              {{ getStatusText(planStepInfo.status) }}
-            </span>
+          <MarkdownContent v-if="turn.content" :content="turn.content" is-user />
+        </template>
+
+        <!-- AI 回复：思考/工具/正文等统一归入一个气泡 -->
+        <template v-else>
+          <div v-for="evt in renderableEvents" :key="evt.uid" class="turn-event">
+            <!-- 计划：聚合为单一时间线（在 PLAN_START 处渲染） -->
+            <PlanTimeline
+              v-if="evt.type === 'PLAN_START' && planView"
+              :plan-view="planView"
+              :active="planActive"
+            />
+
+            <!-- 思考内容：流式中展开（带脉冲动画/计时），完成后默认闭合，可手动切换 -->
+            <ReasoningBlock
+              v-else-if="evt.type === 'REASONING' && evt.content"
+              :uid="evt.uid"
+              :content="evt.content"
+              :streaming="streaming"
+              :open="isReasoningOpen(evt.uid)"
+              :elapsed="reasoningElapsed"
+              @toggle="toggleReasoning(evt.uid)"
+            />
+
+            <!-- 工具调用：结构化卡片 -->
+            <ToolCard
+              v-else-if="evt.type === 'TOOL_CALL'"
+              kind="call"
+              :evt="evt"
+              :open="isExpanded(evt.uid)"
+              @toggle="toggleExpanded(evt.uid)"
+            />
+
+            <!-- 工具结果：结构化卡片 -->
+            <ToolCard
+              v-else-if="evt.type === 'TOOL_CONTENT'"
+              kind="result"
+              :evt="evt"
+              :open="isExpanded(evt.uid)"
+              @toggle="toggleExpanded(evt.uid)"
+            />
+
+            <!-- 醒目提示（如多模态降级：已忽略图片后继续） -->
+            <div v-else-if="evt.type === 'NOTICE' && evt.content" class="notice-banner">
+              <Icon name="alert" :size="13" />
+              <span>{{ evt.content }}</span>
+            </div>
+
+            <!-- 状态提示（重试/中断/轮次等） -->
+            <div v-else-if="evt.type === 'STATUS' && evt.content" class="status-line">
+              {{ evt.content }}
+            </div>
+
+            <!-- 等待用户输入 -->
+            <div v-else-if="evt.type === 'INPUT_REQUEST'" class="status-line">等待用户输入...</div>
+
+            <!-- 正文：markdown -->
+            <MarkdownContent
+              v-else-if="evt.type === 'CONTENT' && evt.content"
+              :content="evt.content"
+              :with-cursor="evt.uid === streamingContentUid"
+            />
           </div>
-          <div class="plan-step-name">{{ planStepInfo.name }}</div>
-          <div v-if="planStepInfo.error" class="plan-error">{{ planStepInfo.error }}</div>
-        </div>
-        <!-- 计划完成：简洁提示 -->
-        <div v-else-if="event.type === 'PLAN_DONE'" class="plan-card plan-done">
-          <div class="plan-card-header">
-            <Icon name="check-circle" :size="12" class="plan-icon" />
-            <span class="plan-title">计划执行完成</span>
+
+          <div v-if="turn.error" class="msg-error-block">
+            <Icon name="alert-triangle" :size="13" />
+            <span>{{ turn.error }}</span>
           </div>
-        </div>
-        <!-- 其他类型用 markdown -->
-        <div
-          v-else-if="event.content"
-          ref="contentRef"
-          class="msg-content"
-          v-html="renderedContent"
-        ></div>
-        <div v-if="event.error" class="msg-error-block">
-          <Icon name="alert-triangle" :size="13" />
-          <span>{{ event.error }}</span>
-        </div>
+        </template>
       </div>
+
       <!-- 气泡下方操作按钮 -->
-      <div v-if="event.content && event.type !== 'STATUS'" class="msg-actions">
-        <button class="msg-action-btn" title="复制" @click="copyContent">
-          <Icon name="copy" :size="12" />
-          复制
+      <div v-if="(isUser && turn.content) || (!isUser && turn.events.length)" class="msg-actions">
+        <button
+          class="msg-action-btn"
+          :class="{ 'is-copied': copied }"
+          :title="copied ? '已复制' : '复制消息内容'"
+          aria-label="复制消息内容"
+          @click="copyContent"
+        >
+          <Icon :name="copied ? 'check' : 'copy'" :size="12" />
+          <span>{{ copied ? '已复制' : '复制' }}</span>
         </button>
         <button
           v-if="canRegenerate"
           class="msg-action-btn"
+          :class="{ 'is-regenerating': regenerating }"
           title="重新生成"
-          @click="emit('regenerate')"
+          aria-label="重新生成"
+          :disabled="regenerating"
+          @click="onRegenerate"
         >
-          <Icon name="refresh" :size="12" />
-          重新生成
+          <Icon name="refresh" :size="12" :class="{ spin: regenerating }" />
+          <span>{{ regenerating ? '重新生成中…' : '重新生成' }}</span>
         </button>
       </div>
     </div>
 
     <!-- 用户头像（右侧） -->
     <div v-if="isUser" class="msg-avatar user-avatar">
-      <Icon :name="config.icon as any" :size="14" />
+      <Icon name="user" :size="14" />
     </div>
     <div v-else class="avatar-spacer"></div>
   </div>
+
+  <!-- 图片灯箱预览 -->
+  <Teleport to="body">
+    <div v-if="lightboxUrl" class="lightbox" @click="closeLightbox">
+      <img :src="lightboxUrl" class="lightbox-img" alt="" />
+      <button class="lightbox-close" title="关闭" @click.stop="closeLightbox">
+        <Icon name="x" :size="16" />
+      </button>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -387,8 +500,7 @@ async function copyContent(): Promise<void> {
 
 /* AI 头像 */
 .is-ai .msg-avatar,
-.is-reasoning .msg-avatar,
-.is-tool .msg-avatar {
+.is-error .msg-avatar {
   background: linear-gradient(135deg, #38bdf8, #a78bfa);
   box-shadow: 0 2px 8px rgba(56, 189, 248, 0.25);
 }
@@ -401,20 +513,11 @@ async function copyContent(): Promise<void> {
   font-size: 14px;
 }
 
-.is-status .msg-avatar {
-  background: #38bdf8;
-  opacity: 0.6;
-}
-
-.is-error .msg-avatar {
-  background: linear-gradient(135deg, #f87171, #f472b6);
-}
-
 /* ===== 气泡 ===== */
 .msg-col {
   display: flex;
   flex-direction: column;
-  max-width: 75%;
+  max-width: 78%;
   min-width: 0;
   position: relative;
 }
@@ -425,14 +528,8 @@ async function copyContent(): Promise<void> {
 }
 
 .is-ai .msg-col,
-.is-reasoning .msg-col,
-.is-tool .msg-col,
 .is-error .msg-col {
   align-items: flex-start;
-}
-
-.is-status .msg-col {
-  align-items: center;
 }
 
 .msg-bubble {
@@ -451,317 +548,138 @@ async function copyContent(): Promise<void> {
   box-shadow: var(--shadow-sm);
 }
 
-.is-user .msg-content {
-  color: var(--text-primary);
-  line-height: 1.6;
-  word-break: break-word;
-  font-size: var(--chat-font-size, 14px);
-  overflow-wrap: break-word;
-}
-
 /* AI 气泡 - 左对齐 */
-.is-ai .msg-bubble {
+.is-ai .msg-bubble,
+.is-error .msg-bubble {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 4px 18px 18px 18px;
-  padding: 10px 16px;
+  padding: 10px 14px;
 }
 
-.is-ai .msg-content {
-  color: var(--text-primary);
-  line-height: 1.7;
-  word-break: break-word;
-  font-size: var(--chat-font-size, 14px);
-  overflow-wrap: break-word;
-}
-
-.is-ai .msg-content :deep(img) {
-  max-width: 100%;
-  border-radius: 8px;
-}
-
-.is-ai .msg-content :deep(table) {
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-/* ===== 思考气泡 ===== */
-.is-reasoning .msg-bubble {
-  background: rgba(167, 139, 250, 0.08);
-  border: 1px solid rgba(167, 139, 250, 0.15);
-  border-radius: 4px 18px 18px 18px;
-  padding: 8px 14px;
-}
-
-/* ===== 计划气泡 ===== */
-.is-plan-start .msg-bubble,
-.is-plan-step .msg-bubble,
-.is-plan-done .msg-bubble {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 4px 18px 18px 18px;
-  padding: 0;
-}
-
-.is-reasoning .msg-content {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-style: italic;
-  line-height: 1.6;
-  word-break: break-word;
-}
-
-/* ===== 工具气泡 ===== */
-.is-tool .msg-bubble {
-  background: rgba(251, 146, 60, 0.06);
-  border: 1px solid rgba(251, 146, 60, 0.12);
-  border-radius: 4px 18px 18px 18px;
-  padding: 8px 14px;
-}
-
-.is-tool .msg-content {
-  font-family: var(--font-code);
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* 工具调用/结果卡片 */
-.tool-card {
-  background: rgba(251, 146, 60, 0.06);
-  border: 1px solid rgba(251, 146, 60, 0.15);
-  border-radius: 10px;
-  overflow: hidden;
-  max-width: 100%;
-}
-
-/* 计划卡片 */
-.plan-card {
-  background: rgba(59, 130, 246, 0.06);
-  border: 1px solid rgba(59, 130, 246, 0.15);
-  border-radius: 12px;
-  overflow: hidden;
-  max-width: 100%;
-  padding: 12px 16px;
-}
-
-.plan-card.plan-start {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.2);
-}
-
-.plan-card.plan-step {
-  background: rgba(16, 185, 129, 0.06);
-  border-color: rgba(16, 185, 129, 0.15);
-}
-
-.plan-card.plan-done {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.2);
-}
-
-.plan-card-header {
+/* 附件（图片等） */
+.msg-attachments {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 8px;
 }
-
-.plan-icon {
-  color: var(--accent-primary);
+.is-user .msg-attachments {
+  justify-content: flex-end;
 }
-
-.plan-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  flex: 1;
+.msg-attach-item {
+  position: relative;
+  max-width: 220px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
 }
-
-.plan-steps {
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: rgba(59, 130, 246, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
+.msg-attach-item.is-image {
+  cursor: zoom-in;
 }
-
-.plan-status {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 500;
+.msg-attach-img {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  max-height: 220px;
+  object-fit: cover;
 }
-
-.plan-status.running {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-}
-
-.plan-status.completed {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
-}
-
-.plan-status.cancelled {
-  background: rgba(156, 163, 175, 0.15);
-  color: #9ca3af;
-}
-
-.plan-status.failed {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-.plan-goal {
-  font-size: 14px;
-  color: var(--text-primary);
-  margin-bottom: 10px;
-  line-height: 1.5;
-}
-
-.plan-steps-list {
+.msg-attach-file {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 6px;
-}
-
-.plan-step-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.step-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--accent-primary);
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.step-name {
-  color: var(--text-secondary);
-  flex: 1;
-}
-
-.plan-step-name {
-  font-size: 14px;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.plan-error {
-  font-size: 12px;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
   padding: 6px 10px;
-  border-radius: 6px;
-  margin-top: 6px;
-}
-
-.tool-card.tool-result {
-  background: rgba(34, 197, 94, 0.05);
-  border-color: rgba(34, 197, 94, 0.15);
-}
-
-.tool-card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.2s ease;
-}
-
-.tool-card-header:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.tool-icon {
-  flex-shrink: 0;
-  color: var(--accent-primary);
-}
-
-.tool-name {
   font-size: 12px;
-  font-weight: 600;
   color: var(--text-secondary);
-  font-family: var(--font-code);
-  flex: 1;
-  min-width: 0;
+  max-width: 220px;
+}
+.msg-attach-file-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tool-toggle {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
-.tool-detail {
-  margin: 0;
-  padding: 8px 12px;
-  max-height: 240px;
-  overflow-y: auto;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-tertiary);
-  background: rgba(0, 0, 0, 0.25);
-  font-family: var(--font-code);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-/* ===== 状态气泡 ===== */
-.is-status {
+/* 图片灯箱 */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.2s ease;
+}
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.is-status .msg-bubble {
-  background: transparent;
-  padding: 2px 0;
-}
-
-.is-status .msg-content {
-  color: var(--text-tertiary);
+/* ===== 状态提示行 ===== */
+.status-line {
   font-size: 12px;
+  color: var(--text-tertiary);
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.5;
+  padding: 2px 0;
+  margin-bottom: 4px;
 }
 
-.is-status .msg-avatar {
-  width: 6px;
-  height: 6px;
-  min-width: 6px;
-  margin-top: 0;
-  align-self: center;
-  opacity: 0.5;
+/* ===== 醒目提示横幅（如多模态降级） ===== */
+.notice-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 8px;
+  word-break: break-word;
+}
+
+.notice-banner :deep(svg) {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 /* ===== 错误 ===== */
 .is-error .msg-bubble {
-  background: rgba(248, 113, 113, 0.08);
-  border: 1px solid rgba(248, 113, 113, 0.15);
-  border-radius: 4px 18px 18px 18px;
-  padding: 8px 14px;
-}
-
-.is-error .msg-col {
-  align-items: flex-start;
+  border-color: rgba(248, 113, 113, 0.25);
 }
 
 .msg-error-block {
@@ -773,162 +691,83 @@ async function copyContent(): Promise<void> {
   gap: 4px;
 }
 
-/* ===== 代码块在气泡内 ===== */
-.msg-content :deep(p) {
-  margin: 0 0 6px;
-}
-
-.msg-content :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
-.msg-content :deep(code) {
-  padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  font-family: var(--font-code);
-  font-size: 13px;
-}
-
-.is-user .msg-content :deep(code) {
-  background: var(--bg-quaternary);
-  color: var(--text-primary);
-}
-
-.msg-content :deep(pre) {
-  margin: 8px 0;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.35);
-  border-radius: 8px;
-  overflow-x: auto;
-  max-width: 100%;
-  position: relative;
-}
-
-.msg-content {
-  min-width: 0;
-  overflow-wrap: break-word;
-}
-
-/* 流式输出光标 */
-.stream-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  border-radius: 1px;
-  background: var(--accent-primary);
-  box-shadow: 0 0 6px var(--accent-primary);
-  animation: blink 1s step-end infinite;
-}
-
-.is-user .msg-content :deep(pre) {
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.msg-content :deep(pre code) {
-  background: transparent;
-  padding: 0;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-/* 代码块复制按钮 */
-.msg-content :deep(.copy-btn) {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  padding: 2px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.4);
-  color: var(--text-tertiary);
-  border-radius: 6px;
-  font-size: 11px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.msg-content :deep(pre:hover .copy-btn) {
-  opacity: 1;
-}
-
 /* 消息操作按钮（气泡下方 - 复制/重新生成） */
 .msg-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin-top: 6px;
   padding: 0 4px;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transform: translateY(-2px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .msg-col:hover .msg-actions {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .msg-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-tertiary);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
-  transition: all 0.2s ease;
+  user-select: none;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.12s ease;
 }
 
 .msg-action-btn:hover {
   color: var(--accent-primary);
-  border-color: var(--border-accent);
-  background: var(--bg-secondary);
-  transform: translateY(-1px);
+  background: rgba(var(--accent-primary-rgb), 0.08);
+  border-color: rgba(var(--accent-primary-rgb), 0.22);
 }
 
-.msg-content :deep(a) {
-  text-decoration: underline;
-  transition: opacity 0.2s;
+.msg-action-btn:active {
+  transform: scale(0.94);
 }
 
-.is-user .msg-content :deep(a) {
-  color: #c7d2fe;
+/* 复制成功：绿色反馈态 */
+.msg-action-btn.is-copied {
+  color: var(--accent-success);
+  background: rgba(var(--accent-success-rgb), 0.1);
+  border-color: rgba(var(--accent-success-rgb), 0.35);
 }
-.is-user .msg-content :deep(a:hover) {
-  opacity: 0.8;
+
+.msg-action-btn.is-copied :deep(svg) {
+  animation: copiedPop 0.3s ease;
 }
-.is-ai .msg-content :deep(a) {
+
+@keyframes copiedPop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 重新生成中：禁用 + 弱化 */
+.msg-action-btn.is-regenerating {
+  cursor: default;
+  opacity: 0.75;
   color: var(--accent-primary);
-}
-.is-ai .msg-content :deep(a:hover) {
-  color: var(--accent-secondary);
-}
-
-.msg-content :deep(ul),
-.msg-content :deep(ol) {
-  padding-left: 20px;
-  margin: 6px 0;
-}
-
-.msg-content :deep(li) {
-  margin: 3px 0;
-  line-height: 1.7;
-}
-
-.msg-content :deep(h1),
-.msg-content :deep(h2),
-.msg-content :deep(h3),
-.msg-content :deep(h4) {
-  margin: 12px 0 6px;
-}
-
-.is-user .msg-content :deep(h1),
-.is-user .msg-content :deep(h2),
-.is-user .msg-content :deep(h3),
-.is-user .msg-content :deep(h4) {
-  color: white;
+  background: rgba(var(--accent-primary-rgb), 0.06);
 }
 </style>

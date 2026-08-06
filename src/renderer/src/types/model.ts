@@ -11,6 +11,7 @@ export interface AiProvider {
   baseUrl?: string
   sortOrder: number
   createTime?: string
+  modelCount?: number
 }
 
 /** AI 模型详情（完整字段） */
@@ -33,11 +34,6 @@ export interface AiModelEnabled {
   name: string
 }
 
-/** 模型连通性测试结果 */
-export interface ModelTestVO {
-  modelName: string
-  latencyMs: number
-}
 
 /** 模型列表（管理用） */
 export interface AiModelList {
@@ -92,7 +88,4 @@ export interface AiMcpConfig {
   args?: string
   env?: string
   requestTimeout: number
-  connectionStatus: number
-  errorMessage?: string
-  connectedTime?: number
 }

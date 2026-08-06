@@ -28,3 +28,29 @@ export function notifyError(message: string): void {
     setTimeout(() => toast.remove(), 300)
   }, 3000)
 }
+
+/** 展示一条成功提示，2 秒后自动消失 */
+export function notifySuccess(message: string): void {
+  const toast = document.createElement('div')
+  toast.className = 'toast toast-success'
+  toast.textContent = message
+  ensureContainer().appendChild(toast)
+
+  setTimeout(() => {
+    toast.classList.add('toast-leave')
+    setTimeout(() => toast.remove(), 300)
+  }, 2000)
+}
+
+/** 展示一条中性提示，2 秒后自动消失 */
+export function notifyInfo(message: string): void {
+  const toast = document.createElement('div')
+  toast.className = 'toast toast-info'
+  toast.textContent = message
+  ensureContainer().appendChild(toast)
+
+  setTimeout(() => {
+    toast.classList.add('toast-leave')
+    setTimeout(() => toast.remove(), 300)
+  }, 2000)
+}

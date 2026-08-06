@@ -1,12 +1,29 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, globalShortcut } from 'electron'
-import { join } from 'path'
+import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, globalShortcut, protocol } from 'electron'
+import { join, extname } from 'path'
 import { existsSync } from 'fs'
+import { readFile } from 'fs/promises'
 import { spawn, type ChildProcess } from 'child_process'
 import * as net from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
 import { DEFAULT_BACKEND_PORT } from '../shared/constants'
+
+// 本地附件协议：允许渲染进程以 lra-file://local/?path=... 展示磁盘上的原始图片
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'lra-file', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+])
+
+const LOCAL_FILE_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+}
 
 // Windows 字体渲染优化
 if (process.platform === 'win32') {
@@ -276,6 +293,19 @@ function showMainWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.jiuzhang.lightrain')
+
+  // 本地附件协议处理器：按 path 参数读取磁盘文件
+  protocol.handle('lra-file', async (request) => {
+    const filePath = new URL(request.url).searchParams.get('path')
+    if (!filePath) return new Response('missing path', { status: 400 })
+    try {
+      const data = await readFile(filePath)
+      const mime = LOCAL_FILE_MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
+      return new Response(data, { headers: { 'Content-Type': mime } })
+    } catch {
+      return new Response('file not found', { status: 404 })
+    }
+  })
 
   // 全局快捷键：唤起主窗口（可由设置页自定义）
   shortcutActions.set('toggleWindow', showMainWindow)

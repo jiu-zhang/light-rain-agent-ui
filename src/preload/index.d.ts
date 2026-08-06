@@ -15,6 +15,7 @@ interface UpdateApi {
   hideToTray: () => void
   quitApp: () => void
   updateShortcut: (id: string, accelerator: string) => void
+  getPathForFile: (file: File) => string
 }
 
 declare global {

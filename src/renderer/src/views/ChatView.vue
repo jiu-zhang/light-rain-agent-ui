@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@renderer/stores'
 import { providerApi } from '@renderer/api/provider'
-import type { ChatEvent, ProviderWithSimpleModels } from '@renderer/types'
+import type { Attachment, ChatTurn, ProviderWithSimpleModels } from '@renderer/types'
 import TopBar from '@renderer/components/layout/TopBar.vue'
 import ChatMessage from '@renderer/components/chat/ChatMessage.vue'
 import ChatInput from '@renderer/components/chat/ChatInput.vue'
@@ -33,7 +33,45 @@ watch(
 const showLoading = computed(() => {
   if (!chatStore.loading) return false
   const last = chatStore.messages[chatStore.messages.length - 1]
-  return !(last?.role === 'assistant' && last?.type === 'CONTENT')
+  // AI 尚未开始输出任何事件（思考/正文等）时才显示占位骨架
+  return !last || last.role === 'user'
+})
+
+/**
+ * 将消息事件流归并为对话回合：
+ * 用户提问自成回合；AI 回复中的思考/工具/正文等事件归并为同一个回合，
+ * 在界面渲染为同一个气泡，避免流式输出被拆成多个气泡。
+ */
+const turns = computed<ChatTurn[]>(() => {
+  const result: ChatTurn[] = []
+  let current: ChatTurn | null = null
+  for (const evt of chatStore.messages) {
+    if (evt.role === 'user') {
+      current = {
+        uid: evt.uid,
+        role: 'user',
+        content: evt.content,
+        attachments: evt.attachments,
+        events: []
+      }
+      result.push(current)
+    } else if (current && current.role === 'assistant') {
+      current.events.push(evt)
+      if (evt.error) current.error = evt.error
+    } else {
+      current = { uid: evt.uid, role: 'assistant', events: [evt] }
+      if (evt.error) current.error = evt.error
+      result.push(current)
+    }
+  }
+  // 当前正在流式输出的最后一个 AI 回合标记为 streaming
+  if (chatStore.loading) {
+    const last = result[result.length - 1]
+    if (last && last.role === 'assistant') {
+      last.streaming = true
+    }
+  }
+  return result
 })
 
 const showEmpty = ref(true)
@@ -55,9 +93,13 @@ function scrollToBottom(): void {
   })
 }
 
+/** 加载更早消息期间临时禁止自动滚到底部（保持原滚动位置） */
+let suppressScrollOnPrepend = false
+
 watch(
   () => chatStore.messages.length,
   () => {
+    if (suppressScrollOnPrepend) return
     scrollToBottom()
   }
 )
@@ -93,17 +135,18 @@ function openSettings(): void {
   router.push('/settings')
 }
 
-function handleSend(text: string): void {
-  sendText(text)
+function handleSend(text: string, attachments?: Attachment[]): void {
+  sendText(text, attachments)
 }
 
 /** 发送文本（空态快捷提问与输入框共用） */
-function sendText(text: string): void {
+function sendText(text: string, attachments?: Attachment[]): void {
   if (!chatStore.currentSessionId) chatStore.createSession()
   const modelId = chatInputRef.value?.selectedModelId
   const options: SendOptions = {
     agentMode: chatInputRef.value?.agentMode ?? false,
-    plan: chatInputRef.value?.planMode ?? false
+    plan: chatInputRef.value?.planMode ?? false,
+    attachments
   }
   chatStore.sendMessage(text, modelId ? String(modelId) : undefined, options)
 }
@@ -126,13 +169,6 @@ function handleStop(): void {
 
 function handleRegenerate(): void {
   chatStore.regenerate()
-}
-
-/** 判断消息是否为当前正在流式输出的 AI 回复 */
-function isStreaming(evt: ChatEvent): boolean {
-  if (!chatStore.loading) return false
-  const last = chatStore.messages[chatStore.messages.length - 1]
-  return evt.role === 'assistant' && evt.type === 'CONTENT' && evt.uid === last?.uid
 }
 
 // ─── 右侧悬浮目录与滚动条 ───────────────────────────
@@ -158,6 +194,7 @@ function firstLineOf(text: string): string {
 
 /** 根据滚动位置更新缩略条位置与高亮的目录项 */
 function onMessagesScroll(): void {
+  void loadOlderIfAtTop()
   const c = messagesContainer.value
   if (!c) return
   const trackH = c.clientHeight
@@ -176,6 +213,23 @@ function onMessagesScroll(): void {
     }
   }
   activeUid.value = current
+}
+
+/** 划到顶部时加载更早一页历史消息，并保持原滚动位置 */
+async function loadOlderIfAtTop(): Promise<void> {
+  const c = messagesContainer.value
+  if (!c || c.scrollTop > 30) return
+  if (chatStore.loadingOlder || !chatStore.hasMoreMessages) return
+  const prevHeight = c.scrollHeight
+  const prevScrollTop = c.scrollTop
+  suppressScrollOnPrepend = true
+  await chatStore.loadOlderMessages()
+  nextTick(() => {
+    suppressScrollOnPrepend = false
+    if (messagesContainer.value === c) {
+      c.scrollTop = c.scrollHeight - prevHeight + prevScrollTop
+    }
+  })
 }
 
 /** 点击目录项，平滑滚动到对应消息 */
@@ -237,13 +291,24 @@ onBeforeUnmount(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([chatStore.loadSessions(), loadEnabledModels()])
+  const tasks: Promise<unknown>[] = [loadEnabledModels()]
+  if (chatStore.sessions.length === 0) {
+    tasks.push(chatStore.loadSessions())
+  }
+  await Promise.all(tasks)
   if (!chatStore.currentSessionId && chatStore.sessions.length > 0) {
     await chatStore.switchSession(chatStore.sessions[0].id)
   } else if (!chatStore.currentSessionId) {
     await chatStore.createSession()
   }
-  nextTick(() => onMessagesScroll())
+  // 进入对话页自动滚动到底部：
+  // 冷启动走 switchSession 时由 messages.length watch 触发；
+  // 已加载会话/返回本页时 messages 无变化不会触发 watch，这里显式兜底
+  if (chatStore.messages.length > 0) {
+    scrollToBottom()
+  } else {
+    onMessagesScroll()
+  }
 })
 </script>
 
@@ -282,11 +347,15 @@ onMounted(async () => {
       </div>
       <div v-show="!showEmpty" class="chat-scroll-wrap">
         <div ref="messagesContainer" class="messages-area" @scroll="onMessagesScroll">
+          <div v-if="chatStore.hasMoreMessages || chatStore.loadingOlder" class="history-loader">
+            <Icon v-if="chatStore.loadingOlder" name="loader" :size="13" class="spin" />
+            <span>{{ chatStore.loadingOlder ? '正在加载更早消息...' : '滑动加载更多消息' }}</span>
+          </div>
           <ChatMessage
-            v-for="evt in chatStore.messages"
-            :key="evt.uid"
-            :event="evt"
-            :streaming="isStreaming(evt)"
+            v-for="turn in turns"
+            :key="turn.uid"
+            :turn="turn"
+            :streaming="turn.streaming"
             @regenerate="handleRegenerate"
           />
           <div v-if="showLoading" class="loading-row">
@@ -527,6 +596,25 @@ onMounted(async () => {
 }
 .messages-area::-webkit-scrollbar {
   display: none;
+}
+
+.history-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 右侧悬浮栏：提问目录 + 滚动条 */

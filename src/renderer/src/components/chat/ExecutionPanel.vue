@@ -29,8 +29,15 @@ function toggleTool(id: string): void {
 
 /** 工具调用 icon */
 function toolIcon(name: string): string {
-  if (name.startsWith('read') || name.startsWith('list') || name.startsWith('glob') || name.startsWith('grep')) return 'folder'
-  if (name.startsWith('write') || name.startsWith('edit') || name.startsWith('delete')) return 'edit'
+  if (
+    name.startsWith('read') ||
+    name.startsWith('list') ||
+    name.startsWith('glob') ||
+    name.startsWith('grep')
+  )
+    return 'folder'
+  if (name.startsWith('write') || name.startsWith('edit') || name.startsWith('delete'))
+    return 'edit'
   if (name.startsWith('shell')) return 'terminal'
   if (name.startsWith('http') || name === 'url_fetch') return 'globe'
   if (name.startsWith('json')) return 'braces'
@@ -41,6 +48,21 @@ function toolIcon(name: string): string {
 
 function statusText(status: string): string {
   return status === 'RUNNING' ? '执行中' : status === 'SUCCESS' ? '成功' : '失败'
+}
+
+function planStatusText(status: string): string {
+  switch (status) {
+    case 'RUNNING':
+      return '执行中'
+    case 'COMPLETED':
+      return '已完成'
+    case 'CANCELLED':
+      return '已取消'
+    case 'FAILED':
+      return '失败'
+    default:
+      return status
+  }
 }
 
 function shortResult(text?: string): string {
@@ -93,21 +115,19 @@ watch(
             class="plan-step"
             :class="s.status.toLowerCase()"
           >
-            <span class="step-index">{{ s.index }}</span>
+            <span class="step-node">
+              <Icon v-if="s.status === 'COMPLETED'" name="check" :size="12" />
+              <Icon v-else-if="s.status === 'RUNNING'" name="loader" :size="12" class="step-spin" />
+              <Icon v-else-if="s.status === 'FAILED'" name="x" :size="12" />
+              <template v-else>{{ s.index }}</template>
+            </span>
             <div class="step-main">
-              <div class="step-name">
-                {{ s.name }}
-                <span v-if="s.error" class="step-error" :title="s.error">失败</span>
-              </div>
+              <div class="step-name">{{ s.name }}</div>
+              <div v-if="s.error" class="step-error" :title="s.error">{{ s.error }}</div>
             </div>
-            <Icon v-if="s.status === 'RUNNING'" name="loader" :size="13" class="step-spin" />
-            <Icon
-              v-else-if="s.status === 'COMPLETED'"
-              name="check"
-              :size="13"
-              class="step-done"
-            />
-            <Icon v-else name="x" :size="13" class="step-fail" />
+            <span class="step-tag" :class="s.status.toLowerCase()">
+              {{ planStatusText(s.status) }}
+            </span>
           </li>
         </ol>
       </section>
@@ -123,22 +143,17 @@ watch(
         <div v-if="toolRuns.length === 0" class="exec-empty">等待 Agent 调用工具…</div>
 
         <div class="tool-list">
-          <div
-            v-for="t in toolRuns"
-            :key="t.id"
-            class="tool-item"
-            :class="t.status.toLowerCase()"
-          >
+          <div v-for="t in toolRuns" :key="t.id" class="tool-item" :class="t.status.toLowerCase()">
             <div class="tool-item-head">
               <Icon :name="toolIcon(t.toolName) as any" :size="14" class="tool-item-icon" />
               <span class="tool-item-name">{{ t.toolName }}</span>
               <span class="tool-item-status">{{ statusText(t.status) }}</span>
-              <button
-                v-if="t.arguments"
-                class="tool-expand"
-                @click="toggleTool(t.id)"
-              >
-                <Icon name="chevron-down" :size="13" :class="{ rotated: expandedTools.has(t.id) }" />
+              <button v-if="t.arguments" class="tool-expand" @click="toggleTool(t.id)">
+                <Icon
+                  name="chevron-down"
+                  :size="13"
+                  :class="{ rotated: expandedTools.has(t.id) }"
+                />
               </button>
             </div>
             <div v-if="expandedTools.has(t.id) && t.arguments" class="tool-args">
@@ -152,7 +167,10 @@ watch(
       </section>
 
       <!-- 空态 -->
-      <div v-if="!loading && toolRuns.length === 0 && planSteps.length === 0" class="exec-empty-page">
+      <div
+        v-if="!loading && toolRuns.length === 0 && planSteps.length === 0"
+        class="exec-empty-page"
+      >
         <Icon name="activity" :size="28" class="exec-empty-icon" />
         <p>执行面板会实时展示计划的<br />步骤进度与工具调用过程</p>
       </div>
@@ -236,8 +254,9 @@ watch(
 .exec-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
+
 .exec-section-title {
   display: flex;
   align-items: center;
@@ -245,18 +264,17 @@ watch(
   font-size: 12px;
   font-weight: 600;
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
 }
 .exec-section-title svg {
   color: var(--accent-primary);
 }
 .live-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--accent-success);
-  animation: livePulse 1.2s ease-in-out infinite;
+  animation: livePulse 1.5s ease-in-out infinite;
 }
 @keyframes livePulse {
   0%,
@@ -273,56 +291,82 @@ watch(
 .plan-goal {
   font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.5;
-  padding: 8px 10px;
-  background: var(--bg-glass);
-  border: 1px solid var(--border-glass);
-  border-radius: 8px;
+  line-height: 1.4;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
   word-break: break-all;
+  margin-bottom: 8px;
 }
 
 .plan-steps {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
+
 .plan-step {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 4px;
   transition: all 0.2s ease;
 }
-.plan-step.completed {
-  border-color: color-mix(in srgb, var(--accent-success) 25%, var(--border-color));
+.plan-step::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 22px;
+  bottom: -2px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--border-color);
+  transition: background 0.3s ease;
 }
-.plan-step.failed {
-  border-color: color-mix(in srgb, var(--accent-error) 30%, var(--border-color));
+.plan-step:last-child::before {
+  display: none;
 }
-.step-index {
-  width: 20px;
-  height: 20px;
+.plan-step.completed::before {
+  background: color-mix(in srgb, var(--accent-success) 45%, transparent);
+}
+.step-node {
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  border-radius: 6px;
+  border-radius: 50%;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
+  transition: all 0.25s ease;
 }
-.plan-step.running .step-index {
-  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+.plan-step.running .step-node {
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
   color: var(--accent-primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+.plan-step.completed .step-node {
+  background: color-mix(in srgb, var(--accent-success) 16%, transparent);
+  color: var(--accent-success);
+}
+.plan-step.failed .step-node {
+  background: color-mix(in srgb, var(--accent-error) 16%, transparent);
+  color: var(--accent-error);
 }
 .step-main {
   flex: 1;
   min-width: 0;
+  padding-top: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .step-name {
   font-size: 12px;
@@ -330,21 +374,41 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
+}
+.plan-step.completed .step-name {
+  color: var(--text-tertiary);
 }
 .step-error {
-  margin-left: 6px;
   font-size: 10px;
   color: var(--accent-error);
+  line-height: 1.3;
+  word-break: break-all;
+}
+.step-tag {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+}
+.step-tag.running {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+.step-tag.completed {
+  color: var(--accent-success);
+  background: color-mix(in srgb, var(--accent-success) 12%, transparent);
+}
+.step-tag.failed {
+  color: var(--accent-error);
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
 }
 .step-spin {
-  color: var(--accent-primary);
   animation: spin 0.9s linear infinite;
-}
-.step-done {
-  color: var(--accent-success);
-}
-.step-fail {
-  color: var(--accent-error);
 }
 
 .tool-list {

@@ -38,26 +38,26 @@ export interface McpConfigForm {
 
 export const mcpApi = {
   list(): Promise<ApiResponse<McpConfig[]>> {
-    return api.get('/ai/mcp').then((res) => res.data)
+    return api.get('/mcp').then((res) => res.data)
   },
 
   create(data: McpConfigForm): Promise<ApiResponse<McpConfig>> {
-    return api.post('/ai/mcp', data).then((res) => res.data)
+    return api.post('/mcp', data).then((res) => res.data)
   },
 
   update(id: number, data: McpConfigForm): Promise<ApiResponse<void>> {
-    return api.put(`/ai/mcp/${id}`, data).then((res) => res.data)
+    return api.put(`/mcp/${id}`, data).then((res) => res.data)
   },
 
   remove(id: number): Promise<ApiResponse<void>> {
-    return api.delete(`/ai/mcp/${id}`).then((res) => res.data)
+    return api.delete(`/mcp/${id}`).then((res) => res.data)
   },
 
   connect(id: number): Promise<ApiResponse<void>> {
-    return api.post(`/ai/mcp/${id}/connect`).then((res) => res.data)
+    return api.post(`/mcp/${id}/connect`).then((res) => res.data)
   },
 
   disconnect(id: number): Promise<ApiResponse<void>> {
-    return api.post(`/ai/mcp/${id}/disconnect`).then((res) => res.data)
+    return api.post(`/mcp/${id}/disconnect`).then((res) => res.data)
   }
 }

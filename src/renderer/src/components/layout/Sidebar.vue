@@ -17,7 +17,6 @@ const navItems = [
   { path: '/cron', icon: 'clock', label: '定时任务' },
   { path: '/executions', icon: 'activity', label: '执行记录' },
   { path: '/plans', icon: 'git-branch', label: '计划模板' },
-  { path: '/files', icon: 'folder', label: '文件' }
 ]
 
 const bottomItems = computed(() => [

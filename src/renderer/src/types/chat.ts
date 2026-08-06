@@ -9,6 +9,7 @@ export type ChatEventType =
   | 'TOOL_CALL'
   | 'TOOL_CONTENT'
   | 'STATUS'
+  | 'NOTICE'
   | 'PLAN_START'
   | 'PLAN_STEP'
   | 'PLAN_DONE'
@@ -26,6 +27,47 @@ export interface ChatEvent {
   content?: string
   error?: string
   role?: 'user' | 'assistant' | 'tool'
+  /** 用户消息附带的多模态附件（图片等） */
+  attachments?: Attachment[]
+}
+
+/**
+ * 一轮对话（用户提问，或一次完整的 AI 回复）
+ * <p>
+ * 一次 AI 回复中的思考 / 工具调用 / 正文等事件被归并为一个回合，
+ * 在界面上统一展示在同一个气泡内，避免流式输出被拆成多个气泡。
+ * </p>
+ */
+export interface ChatTurn {
+  /** 定位用 uid：用户消息取自身 uid，AI 回复取首个子事件 uid */
+  uid: string
+  role: 'user' | 'assistant'
+  /** 用户提问文本（仅 user 回合） */
+  content?: string
+  /** 用户消息附带的多模态附件（仅 user 回合） */
+  attachments?: Attachment[]
+  /** 子事件列表（按到达顺序），AI 回合的思考/工具/正文/状态都归入其中 */
+  events: ChatEvent[]
+  /** 最终错误信息（AI 回合遇到错误时） */
+  error?: string
+  /** 是否为当前正在流式输出的 AI 回合 */
+  streaming?: boolean
+}
+
+/** 附件描述（上传后由后端返回 fileId，或直接引用本地路径） */
+export interface Attachment {
+  /** 附件唯一标识（落盘文件名） */
+  fileId: string
+  /** 原始文件名 */
+  name: string
+  /** MIME 类型，如 image/png */
+  mimeType?: string
+  /** 文件大小（字节） */
+  size?: number
+  /** 本地预览 URL（仅当前会话内有效，用于上传后即时预览） */
+  previewUrl?: string
+  /** 本地文件绝对路径（Electron 端直接引用原文件，不落盘副本） */
+  localPath?: string
 }
 
 /** 聊天请求 */
@@ -40,6 +82,8 @@ export interface ChatRequest {
   templateId?: string
   /** 计划步骤：直接按指定步骤执行 */
   steps?: PlanStep[]
+  /** 附件列表（多模态图片等） */
+  attachments?: Attachment[]
 }
 
 /** 计划步骤 */
@@ -80,14 +124,20 @@ export interface ChatMessage {
   content: string
   /** 消息元数据 JSON，含 reasoningContent / toolCalls / toolResponses，用于还原历史事件 */
   metadata?: string
+  /**
+   * 回合完整事件流 JSON（question + events 数组），
+   * 按原始顺序记录思考/工具/计划/正文，刷新后据此还原整个回合，
+   * 优先于 metadata 还原
+   */
+  events?: string
   createTime: string
 }
 
-/** 消息查询参数 */
+/** 消息查询参数（对齐后端 PageQuery 的 pageNum/pageSize） */
 export interface MessageQuery {
   sessionId: string
-  page?: number
-  size?: number
+  pageNum?: number
+  pageSize?: number
 }
 
 /** 计划模板 */
@@ -153,6 +203,7 @@ export interface SSECallbacks {
   onToolCall?: (content: string) => void
   onToolContent?: (content: string) => void
   onStatus?: (content: string) => void
+  onNotice?: (content: string) => void
   onPlanStart?: (content: string) => void
   onPlanStep?: (content: string) => void
   onPlanDone?: (content: string) => void
