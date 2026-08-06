@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // 自定义 IPC API：仅暴露必要通道，不暴露全量 electronAPI，缩小渲染进程攻击面
 const api = {
@@ -52,7 +52,9 @@ const api = {
   quitApp: (): void => ipcRenderer.send('quit-app'),
   // 快捷键：更新主进程注册的全局快捷键
   updateShortcut: (id: string, accelerator: string): void =>
-    ipcRenderer.send('shortcut-update', { id, accelerator })
+    ipcRenderer.send('shortcut-update', { id, accelerator }),
+  // 获取本地文件的绝对路径（配合聊天附件"引用原文件"使用）
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file)
 }
 
 contextBridge.exposeInMainWorld('api', api)

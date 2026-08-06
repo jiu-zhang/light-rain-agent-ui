@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { planApi, type PlanTemplateVersion } from '@renderer/api/plan'
 import type { PlanTemplate } from '@renderer/types'
 import Icon from '@renderer/components/common/Icon.vue'
+import ConfirmDialog from '@renderer/components/common/ConfirmDialog.vue'
 
 const templates = ref<PlanTemplate[]>([])
 const loading = ref(false)
@@ -21,6 +22,14 @@ const versionsLoading = ref(false)
 const versions = ref<PlanTemplateVersion[]>([])
 const versionsTarget = ref<PlanTemplate | null>(null)
 const rollbackingId = ref<string | number | null>(null)
+
+// 删除模板确认对话框状态
+const showDeleteConfirm = ref(false)
+const deleteTarget = ref<PlanTemplate | null>(null)
+
+// 回滚模板确认对话框状态
+const showRollbackConfirm = ref(false)
+const rollbackTarget = ref<PlanTemplateVersion | null>(null)
 
 async function load(): Promise<void> {
   loading.value = true
@@ -111,14 +120,27 @@ async function save(): Promise<void> {
   }
 }
 
-async function remove(t: PlanTemplate): Promise<void> {
-  if (!window.confirm(`确认删除模板「${t.name}」？`)) return
+function showDeleteDialog(t: PlanTemplate): void {
+  deleteTarget.value = t
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete(): Promise<void> {
+  if (!deleteTarget.value) return
   try {
-    await planApi.deleteTemplate(t.id)
+    await planApi.deleteTemplate(deleteTarget.value.id)
     await load()
   } catch {
     errorMsg.value = '删除失败'
+  } finally {
+    showDeleteConfirm.value = false
+    deleteTarget.value = null
   }
+}
+
+function cancelDelete(): void {
+  showDeleteConfirm.value = false
+  deleteTarget.value = null
 }
 
 async function openVersions(t: PlanTemplate): Promise<void> {
@@ -136,19 +158,31 @@ async function openVersions(t: PlanTemplate): Promise<void> {
   }
 }
 
-async function rollback(v: PlanTemplateVersion): Promise<void> {
+function showRollbackDialog(v: PlanTemplateVersion): void {
   if (!versionsTarget.value) return
-  if (!window.confirm(`确认将模板「${v.name}」回滚到 v${v.version}？当前内容将被保存为新版本。`)) return
-  rollbackingId.value = v.id
+  rollbackTarget.value = v
+  showRollbackConfirm.value = true
+}
+
+async function confirmRollback(): Promise<void> {
+  if (!rollbackTarget.value || !versionsTarget.value) return
+  rollbackingId.value = rollbackTarget.value.id
   try {
-    await planApi.rollbackTemplate(versionsTarget.value.id, v.id)
+    await planApi.rollbackTemplate(versionsTarget.value.id, rollbackTarget.value.id)
     versionsVisible.value = false
     await load()
   } catch {
     errorMsg.value = '回滚失败'
   } finally {
     rollbackingId.value = null
+    showRollbackConfirm.value = false
+    rollbackTarget.value = null
   }
+}
+
+function cancelRollback(): void {
+  showRollbackConfirm.value = false
+  rollbackTarget.value = null
 }
 
 function formatTime(t?: string): string {
@@ -194,7 +228,7 @@ onMounted(load)
               <button class="icon-btn" title="编辑" @click="openEdit(t)">
                 <Icon name="edit" :size="14" />
               </button>
-              <button class="icon-btn danger" title="删除" @click="remove(t)">
+              <button class="icon-btn danger" title="删除" @click="showDeleteDialog(t)">
                 <Icon name="trash" :size="14" />
               </button>
             </div>
@@ -273,7 +307,7 @@ onMounted(load)
               <button
                 class="ghost-btn sm"
                 :disabled="rollbackingId === v.id"
-                @click="rollback(v)"
+                @click="showRollbackDialog(v)"
               >
                 <Icon v-if="rollbackingId === v.id" name="loader" :size="12" class="spin" />
                 回滚
@@ -283,6 +317,28 @@ onMounted(load)
         </div>
       </div>
     </div>
+    
+    <!-- 删除模板确认对话框 -->
+    <ConfirmDialog
+      v-if="showDeleteConfirm"
+      title="删除模板"
+      :message="deleteTarget ? `确认删除模板「${deleteTarget.name}」？此操作不可恢复。` : ''"
+      confirm-text="删除"
+      cancel-text="取消"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
+
+    <!-- 回滚模板确认对话框 -->
+    <ConfirmDialog
+      v-if="showRollbackConfirm"
+      title="回滚模板"
+      :message="rollbackTarget && versionsTarget ? `确认将模板「${versionsTarget.name}」回滚到 v${rollbackTarget.version}？当前内容将被保存为新版本。` : ''"
+      confirm-text="回滚"
+      cancel-text="取消"
+      @confirm="confirmRollback"
+      @cancel="cancelRollback"
+    />
   </div>
 </template>
 

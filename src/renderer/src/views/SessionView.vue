@@ -16,6 +16,10 @@ const chatStore = useChatStore()
 
 const sessions = ref<Session[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
+const sessionPage = ref(1)
+const sessionTotalPages = ref(0)
+const listRef = ref<HTMLElement | null>(null)
 const showDeleteConfirm = ref(false)
 const pendingDeleteId = ref<string | null>(null)
 const renamingId = ref<string | null>(null)
@@ -23,6 +27,9 @@ const renameText = ref('')
 const search = ref('')
 const exportingId = ref<string | null>(null)
 const exportMenuFor = ref<string | null>(null)
+
+/** 会话列表每页条数 */
+const SESSION_PAGE_SIZE = 20
 
 /** 搜索过滤 + 按日期分组（今天 / 昨天 / 更早） */
 const groupedSessions = computed(() => {
@@ -70,12 +77,18 @@ async function exportSessionText(s: Session): Promise<void> {
 async function buildExportLines(s: Session): Promise<string[] | null> {
   exportingId.value = s.id
   try {
-    const res = await chatApi.getMessages({ sessionId: s.id, page: 1, size: 200 })
+    const res = await chatApi.getMessages({ sessionId: s.id, pageNum: 1, pageSize: 200 })
     const messages = res.data?.list ?? []
+    // 复用历史还原逻辑，避免 events 回合记录与正文行重复
+    const events = chatStore.restoreHistory(messages)
     const lines: string[] = [`# ${s.title || '新对话'}`, '']
-    for (const m of messages) {
-      const roleLabel = m.role === 'user' ? '用户' : m.role === 'tool' ? '工具' : 'AI'
-      lines.push(`**${roleLabel}**`, '', m.content, '')
+    for (const e of events) {
+      if (!e.content) continue
+      if (e.type === 'CONTENT' && e.role === 'user') {
+        lines.push('**用户**', '', e.content, '')
+      } else if (e.type === 'CONTENT') {
+        lines.push('**AI**', '', e.content, '')
+      }
     }
     return lines
   } catch {
@@ -112,14 +125,46 @@ function cancelRename(): void {
 async function loadSessions(): Promise<void> {
   loading.value = true
   try {
-    const res = await chatApi.listSessions()
-    if (res.code === 200 && res.data?.length) {
-      sessions.value = res.data
+    const res = await chatApi.listSessionsPage(1, SESSION_PAGE_SIZE)
+    if (res.code === 200 && res.data) {
+      sessions.value = res.data.list ?? []
+      sessionTotalPages.value = Number(res.data.pages) || 0
+      sessionPage.value = 1
     }
   } catch (e) {
     console.warn('加载会话列表失败:', e)
   } finally {
     loading.value = false
+  }
+}
+
+/** 滚动到底部时加载下一页会话（去重追加） */
+async function loadMoreSessions(): Promise<void> {
+  if (loadingMore.value || sessionPage.value >= sessionTotalPages.value) return
+  loadingMore.value = true
+  try {
+    const next = sessionPage.value + 1
+    const res = await chatApi.listSessionsPage(next, SESSION_PAGE_SIZE)
+    if (res.code === 200 && res.data?.list?.length) {
+      const existing = new Set(sessions.value.map((s) => s.id))
+      const added = res.data.list.filter((s) => !existing.has(s.id))
+      sessions.value = [...sessions.value, ...added]
+      sessionPage.value = next
+    } else {
+      sessionTotalPages.value = next - 1
+    }
+  } catch (e) {
+    console.warn('加载更多会话失败:', e)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+function onListScroll(): void {
+  const el = listRef.value
+  if (!el) return
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+    void loadMoreSessions()
   }
 }
 
@@ -167,7 +212,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="view-container session-view">
+  <div class="view-container session-view" ref="listRef" @scroll="onListScroll">
     <div class="view-header">
       <div class="header-content">
         <h1 class="view-title">会话历史</h1>
@@ -218,7 +263,7 @@ onBeforeUnmount(() => {
             v-for="(session, si) in group.list"
             :key="session.id"
             class="session-item"
-            :style="{ '--item-delay': (gi * 0.05 + si * 0.03) + 's' }"
+            :style="{ '--item-delay': gi * 0.05 + si * 0.03 + 's' }"
             @click="openSession(session.id)"
           >
             <div class="item-accent"></div>
@@ -270,6 +315,10 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+      </div>
+      <div v-if="sessionPage < sessionTotalPages || loadingMore" class="sessions-loader">
+        <Icon v-if="loadingMore" name="loader" :size="13" class="spin" />
+        <span>{{ loadingMore ? '正在加载更多会话...' : '下滑加载更多会话' }}</span>
       </div>
     </div>
     <ConfirmDialog
@@ -331,6 +380,18 @@ onBeforeUnmount(() => {
 .search-wrap .search-input:focus {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.16);
+}
+
+/* 内容区 */
+.sessions-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 0 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  user-select: none;
 }
 
 /* 内容区 */

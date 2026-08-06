@@ -102,9 +102,25 @@ export function setBackendPort(port: number): void {
   api.defaults.baseURL = `http://127.0.0.1:${port}`
 }
 
+/**
+ * 生成附件访问 URL（历史消息中展示上传的图片）
+ * 调用时实时读取 baseURL，兼容开发（/api 代理）与生产（直连端口）两种模式。
+ */
+export function attachmentUrl(fileId: string): string {
+  return `${api.defaults.baseURL}/ai/chat/attachments/${encodeURIComponent(fileId)}`
+}
+
+/**
+ * 生成本地文件引用的展示 URL（lra-file 协议，由 Electron 主进程读取磁盘文件）
+ */
+export function localAttachmentUrl(localPath: string): string {
+  return `lra-file://local/?path=${encodeURIComponent(localPath)}`
+}
+
 export default api
 
 // 直接引入各模块（不通过 barrel export 避免循环依赖）
 export { chatApi } from './chat'
 export { modelApi } from './model'
 export { providerApi } from './provider'
+export { cronTaskLogApi } from './cronTaskLog'

@@ -4,42 +4,13 @@ import { providerApi } from '@renderer/api/provider'
 import { modelApi } from '@renderer/api/model'
 import type { AiProvider, AiModel, AiModelList } from '@renderer/types'
 import Icon from '@renderer/components/common/Icon.vue'
+import ConfirmDialog from '@renderer/components/common/ConfirmDialog.vue'
 
 const providers = ref<AiProvider[]>([])
 const modelsMap = ref<Record<number, AiModelList[]>>({})
 const selectedProviderId = ref<number | null>(null)
 const loading = ref(false)
-const testingId = ref<number | null>(null)
-const testResults = ref<Record<number, { latencyMs: number }>>({})
 
-/** 测试模型连通性 */
-async function testModel(id: number): Promise<void> {
-  testingId.value = id
-  try {
-    const res = await modelApi.test(id)
-    testResults.value[id] = { latencyMs: res.data?.latencyMs ?? -1 }
-  } catch {
-    testResults.value[id] = { latencyMs: -1 }
-  } finally {
-    testingId.value = null
-  }
-}
-
-/** 厂商连通状态：任一模型测试成功→正常；有失败→异常；未测→未测试 */
-function providerStatus(providerId: number): 'ok' | 'fail' | 'untested' {
-  const models = modelsMap.value[providerId] || []
-  let tested = false
-  let failed = false
-  for (const m of models) {
-    const r = testResults.value[m.id]
-    if (r) {
-      tested = true
-      if (r.latencyMs < 0) failed = true
-    }
-  }
-  if (!tested) return 'untested'
-  return failed ? 'fail' : 'ok'
-}
 
 const selectedProvider = computed(() =>
   providers.value.find((p) => p.id === selectedProviderId.value)
@@ -146,7 +117,22 @@ async function saveModel(): Promise<void> {
   }
 }
 
-async function deleteModel(id: number): Promise<void> {
+const showDeleteConfirm = ref(false)
+const modelToDelete = ref<AiModel | null>(null)
+
+function confirmDeleteModel(m: AiModel): void {
+  modelToDelete.value = m
+  showDeleteConfirm.value = true
+}
+
+function cancelDelete(): void {
+  showDeleteConfirm.value = false
+  modelToDelete.value = null
+}
+
+async function deleteModel(): Promise<void> {
+  if (!modelToDelete.value) return
+  const id = modelToDelete.value.id
   try {
     await modelApi.delete(id)
     if (selectedProviderId.value && modelsMap.value[selectedProviderId.value]) {
@@ -154,6 +140,8 @@ async function deleteModel(id: number): Promise<void> {
         (m) => m.id !== id
       )
     }
+    showDeleteConfirm.value = false
+    modelToDelete.value = null
   } catch (e) {
     console.warn(e)
   }
@@ -240,15 +228,12 @@ onMounted(() => loadAll())
               <div class="provider-body">
                 <div class="provider-name-row">
                   <span class="provider-name">{{ p.name }}</span>
-                  <div class="provider-status" :class="providerStatus(p.id)">
-                    <span class="status-dot"></span>
+                </div>
+                  <div class="provider-sub">
+                    <span class="provider-code">{{ p.code }}</span>
+                    <span class="provider-sep">·</span>
+                    <span class="provider-models">{{ p.modelCount || 0 }} 模型</span>
                   </div>
-                </div>
-                <div class="provider-sub">
-                  <span class="provider-code">{{ p.code }}</span>
-                  <span class="provider-sep">·</span>
-                  <span class="provider-models">{{ (modelsMap[p.id] || []).length }} 模型</span>
-                </div>
               </div>
               <button
                 class="mini-btn edit"
@@ -268,7 +253,7 @@ onMounted(() => loadAll())
               <div class="panel-title-area">
                 <h2 class="panel-title">{{ selectedProvider.name }}</h2>
                 <span class="panel-subtitle">
-                  {{ selectedProvider.code }} · 共 {{ currentModels.length }} 个模型
+                  {{ selectedProvider.code }} · 共 {{ selectedProvider.modelCount || 0 }} 个模型
                   <template v-if="selectedProvider.baseUrl">
                     <span class="panel-sep">·</span>
                     <span class="panel-url">{{ selectedProvider.baseUrl }}</span>
@@ -305,38 +290,14 @@ onMounted(() => loadAll())
                     <span class="badge" :class="m.isEnabled ? 'badge-success' : 'badge-error'">{{
                       m.isEnabled ? '已启用' : '已禁用'
                     }}</span>
-                    <span
-                      v-if="testResults[m.id]"
-                      class="badge"
-                      :class="testResults[m.id].latencyMs >= 0 ? 'badge-success' : 'badge-error'"
-                    >
-                      <template v-if="testResults[m.id].latencyMs >= 0">
-                        <Icon name="check" :size="10" />
-                        {{ testResults[m.id].latencyMs }}ms
-                      </template>
-                      <template v-else>
-                        <Icon name="close" :size="10" />
-                        失败
-                      </template>
-                    </span>
                   </div>
                 </div>
                 <div class="model-card-actions">
-                  <button
-                    class="action-btn sm"
-                    title="测试连通性"
-                    :disabled="testingId === m.id"
-                    @click="testModel(m.id)"
-                  >
-                    <Icon v-if="testingId === m.id" name="loader" :size="12" class="spin" />
-                    <Icon v-else name="monitor" :size="12" />
-                    <span>{{ testingId === m.id ? '测试中...' : '测试' }}</span>
-                  </button>
                   <button class="action-btn sm" title="编辑" @click="openEditModel(m)">
                     <Icon name="edit" :size="12" />
                     <span>编辑</span>
                   </button>
-                  <button class="action-btn sm danger" title="删除" @click="deleteModel(m.id)">
+                  <button class="action-btn sm danger" title="删除" @click="confirmDeleteModel(m)">
                     <Icon name="trash" :size="12" />
                     <span>删除</span>
                   </button>
@@ -425,6 +386,17 @@ onMounted(() => loadAll())
         </div>
       </div>
     </div>
+
+    <!-- 删除模型确认对话框 -->
+    <ConfirmDialog
+      v-if="showDeleteConfirm"
+      title="删除模型"
+      :message="modelToDelete ? `确认删除模型「${modelToDelete.name}」？此操作不可恢复。` : ''"
+      confirm-text="删除"
+      cancel-text="取消"
+      @confirm="deleteModel"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 
@@ -608,33 +580,6 @@ onMounted(() => loadAll())
   color: var(--text-quaternary);
 }
 
-/* 厂商状态指示 */
-.provider-status {
-  display: inline-flex;
-  align-items: center;
-}
-
-.provider-status .status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-quaternary);
-  flex-shrink: 0;
-}
-
-.provider-status.ok .status-dot {
-  background: var(--accent-success);
-  box-shadow: 0 0 6px var(--accent-success);
-}
-
-.provider-status.fail .status-dot {
-  background: var(--accent-error);
-  box-shadow: 0 0 6px var(--accent-error);
-}
-
-.provider-status.untested .status-dot {
-  background: var(--text-quaternary);
-}
 
 .provider-item .mini-btn {
   opacity: 0;

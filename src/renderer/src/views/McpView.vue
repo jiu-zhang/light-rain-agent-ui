@@ -2,12 +2,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { mcpApi, type McpConfig, type McpConfigForm } from '@renderer/api/mcp'
 import Icon from '@renderer/components/common/Icon.vue'
+import { notifySuccess } from '@renderer/utils/feedback'
 
 const configs = ref<McpConfig[]>([])
 const loading = ref(false)
 const showForm = ref(false)
 const editingId = ref<number | null>(null)
 const connectingId = ref<number | null>(null)
+const showDeleteConfirm = ref(false)
+const configToDelete = ref<McpConfig | null>(null)
 const form = ref<McpConfigForm>({
   name: '',
   transportType: 'SSE',
@@ -89,8 +92,10 @@ async function saveForm(): Promise<void> {
   try {
     if (editingId.value) {
       await mcpApi.update(editingId.value, { ...form.value })
+      notifySuccess(`已更新 MCP 服务器「${form.value.name}」`)
     } else {
       await mcpApi.create({ ...form.value })
+      notifySuccess(`已创建 MCP 服务器「${form.value.name}」`)
     }
     showForm.value = false
     await loadConfigs()
@@ -101,9 +106,11 @@ async function saveForm(): Promise<void> {
 
 async function toggleConnect(c: McpConfig): Promise<void> {
   if (connectingId.value) return
+  
   if (c.connectionStatus === 1) {
     try {
       await mcpApi.disconnect(c.id)
+      notifySuccess(`已断开 MCP 服务器「${c.name}」`)
     } catch {
       // 已提示
     }
@@ -111,6 +118,7 @@ async function toggleConnect(c: McpConfig): Promise<void> {
     connectingId.value = c.id
     try {
       await mcpApi.connect(c.id)
+      notifySuccess(`已连接 MCP 服务器「${c.name}」`)
     } catch {
       // 已提示
     } finally {
@@ -120,13 +128,28 @@ async function toggleConnect(c: McpConfig): Promise<void> {
   await loadConfigs()
 }
 
-async function deleteConfig(c: McpConfig): Promise<void> {
+function confirmDelete(c: McpConfig): void {
+  configToDelete.value = c
+  showDeleteConfirm.value = true
+}
+
+async function handleDelete(): Promise<void> {
+  if (!configToDelete.value) return
+
   try {
-    await mcpApi.remove(c.id)
-    configs.value = configs.value.filter((x) => x.id !== c.id)
+    await mcpApi.remove(configToDelete.value.id)
+    configs.value = configs.value.filter((x) => x.id !== configToDelete.value!.id)
+    notifySuccess(`已删除 MCP 服务器「${configToDelete.value.name}」`)
+    showDeleteConfirm.value = false
+    configToDelete.value = null
   } catch {
     // 已由拦截器统一提示
   }
+}
+
+function cancelDelete(): void {
+  showDeleteConfirm.value = false
+  configToDelete.value = null
 }
 
 function formatTime(ts?: number): string {
@@ -155,16 +178,45 @@ onMounted(loadConfigs)
 </script>
 
 <template>
-  <div class="page-container">
-    <div class="page-header">
-      <h1 class="page-title">
-        <Icon name="globe" :size="24" class="title-icon" />
-        MCP 服务器
-      </h1>
-      <p class="page-desc">管理 Model Context Protocol 服务器，连接后其工具将自动注入 Agent</p>
+<div class="page-layout">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">MCP 服务器列表</h2>
+        <button class="action-btn sm" @click="openCreate">
+          <Icon name="plus" :size="12" />
+          <span>新建服务器</span>
+        </button>
+      </div>
+      
+      <div v-if="loading" class="sidebar-content loading">
+        <span>加载中...</span>
+      </div>
+      <div v-else-if="configs.length === 0" class="sidebar-content empty">
+        <span class="empty-text">暂无 MCP 服务器</span>
+      </div>
+      <div v-else class="sidebar-content">
+        <div v-for="c in configs" :key="c.id" class="sidebar-item">
+          <div class="item-info">
+            <div class="item-name">{{ c.name }}</div>
+            <div class="item-type">{{ c.transportType }}</div>
+          </div>
+          <div class="item-status" :class="statusInfo(c.connectionStatus).cls">
+            {{ statusInfo(c.connectionStatus).label }}
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="section-block">
+    <div class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">
+          <Icon name="globe" :size="24" class="title-icon" />
+          MCP 服务器
+        </h1>
+        <p class="page-desc">管理 Model Context Protocol 服务器，连接后其工具将自动注入 Agent</p>
+      </div>
+
+      <div class="section-block">
       <div class="section-head">
         <span class="section-label">
           <Icon name="globe" :size="12" />
@@ -205,7 +257,7 @@ onMounted(loadConfigs)
             <Icon name="edit" :size="12" />
             <span>编辑</span>
           </button>
-          <button class="action-btn sm danger" @click="deleteConfig(c)">
+          <button class="action-btn sm danger" @click="confirmDelete(c)">
             <Icon name="trash" :size="12" />
             <span>删除</span>
           </button>
@@ -280,15 +332,158 @@ onMounted(loadConfigs)
           </button>
         </div>
       </div>
+      </div>
     </div>
+
+    <!-- 删除确认弹框 -->
+  <div v-if="showDeleteConfirm" class="modal-inner-overlay" @click.self="cancelDelete">
+    <div class="modal-inner-box" style="max-width: 420px">
+      <h3 style="color: var(--accent-error); margin-bottom: 12px">
+        <Icon name="trash" :size="16" />
+        确认删除 MCP 服务器
+      </h3>
+      <p style="color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px">
+        您即将删除 MCP 服务器：<br />
+        <strong style="color: var(--text-primary)">{{ configToDelete?.name }}</strong>
+      </p>
+      <div style="background: color-mix(in srgb, var(--accent-error) 8%, var(--bg-primary)); 
+                  border: 1px solid color-mix(in srgb, var(--accent-error) 20%, transparent); 
+                  border-radius: var(--radius-md); padding: 12px; margin-bottom: 20px">
+        <p style="color: var(--accent-error); margin: 0; font-size: 12px; display: flex; align-items: center; gap: 6px">
+          <Icon name="alert-triangle" :size="12" />
+          删除后无法恢复，请谨慎操作
+        </p>
+      </div>
+      <div class="form-actions" style="margin: 0">
+        <button class="action-btn" @click="cancelDelete">取消</button>
+        <button class="action-btn primary" style="--btn-bg: var(--danger-gradient); 
+                                                     --btn-color: white; 
+                                                     box-shadow: var(--glow-error)" 
+                @click="handleDelete">
+          确认删除
+        </button>
+      </div>
+    </div>
+  </div>
   </div>
 </template>
 
 <style scoped>
-.page-container {
-  padding: var(--space-lg) var(--space-xl);
+.page-layout {
+  display: flex;
   height: 100%;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.sidebar {
+  width: 300px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.sidebar-content {
+  padding: 12px;
+  flex: 1;
   overflow-y: auto;
+}
+
+.sidebar-content.loading,
+.sidebar-content.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+.empty-text {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.sidebar-item {
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-item:hover {
+  border-color: var(--border-accent);
+  background: var(--bg-hover);
+}
+
+.item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-type {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.item-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.item-status.on {
+  background: color-mix(in srgb, var(--accent-success) 12%, transparent);
+  color: var(--accent-success);
+}
+
+.item-status.off {
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  color: var(--accent-error);
+}
+
+.item-status.pending {
+  background: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+  color: var(--accent-warning);
+}
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-header {
@@ -316,7 +511,10 @@ onMounted(loadConfigs)
 }
 
 .section-block {
-  max-width: 760px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .section-head {
@@ -355,6 +553,10 @@ onMounted(loadConfigs)
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 0;
 }
 
 .list-item {
