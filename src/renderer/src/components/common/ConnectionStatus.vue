@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { notifyError } from '@renderer/utils/feedback'
+import api from '@renderer/api'
 import Icon, { type IconName } from './Icon.vue'
 
 enum ConnectionState {
@@ -48,12 +49,18 @@ const stateConfig: Record<ConnectionState, { icon: IconName; color: string; labe
 }
 
 function checkConnection(): Promise<boolean> {
-  return fetch('/api/health', {
+  return fetch(healthCheckUrl(), {
     method: 'GET',
     cache: 'no-store'
   })
     .then((response) => response.ok)
     .catch(() => false)
+}
+
+/** 后端健康检查地址：file:// 下相对路径会解析失败，必须用绝对地址 */
+function healthCheckUrl(): string {
+  const base = api.defaults.baseURL ?? ''
+  return base.startsWith('http') ? `${base}/api/health` : '/api/health'
 }
 
 async function ping(): Promise<void> {

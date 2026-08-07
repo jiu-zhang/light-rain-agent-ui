@@ -9,9 +9,13 @@ import App from './App.vue'
 import router from './router'
 import pinia from './stores'
 import { notifyError } from './utils/feedback'
+import { initTheme } from './utils/theme'
 import { getChatPrefs, applyChatPrefs } from '@renderer/utils'
 import 'highlight.js/styles/github-dark.min.css'
 import './styles/global.css'
+
+// 先应用主题（设置 data-theme 与 CSS 变量），确保启动加载页等首个组件按当前主题渲染
+initTheme()
 
 // 应用聊天显示偏好（消息密度/字号）
 applyChatPrefs(getChatPrefs())

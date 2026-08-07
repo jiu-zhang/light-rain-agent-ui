@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { setBackendPort } from '@renderer/api/index'
+import api, { setBackendPort } from '@renderer/api/index'
 
 declare const __APP_VERSION__: string
 const appVersion = __APP_VERSION__
@@ -16,7 +16,7 @@ let healthTimer: ReturnType<typeof setInterval> | null = null
 /** 探测后端是否已就绪（刷新场景下事件已错过，需主动探测） */
 async function probeBackend(): Promise<boolean> {
   try {
-    const resp = await fetch('/api/ai/providers/list-all', {
+    const resp = await fetch(probeUrl(), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     })
@@ -24,6 +24,14 @@ async function probeBackend(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** 探测地址：file:// 下相对路径会解析失败，必须用绝对地址 */
+function probeUrl(): string {
+  const base = api.defaults.baseURL ?? ''
+  return base.startsWith('http')
+    ? `${base}/api/ai/providers/list-all`
+    : '/api/ai/providers/list-all'
 }
 
 onMounted(async () => {
@@ -84,11 +92,16 @@ onUnmounted(() => {
     <div v-if="visible" class="loading-screen" :class="{ 'simple-mode': !isFirstBoot }">
       <!-- 雨滴背景（仅首次启动） -->
       <div v-if="isFirstBoot" class="rain-bg">
-        <div v-for="i in 20" :key="i" class="raindrop" :style="{
-          left: Math.random() * 100 + '%',
-          animationDelay: Math.random() * 3 + 's',
-          animationDuration: 1.5 + Math.random() * 1 + 's'
-        }" />
+        <div
+          v-for="i in 20"
+          :key="i"
+          class="raindrop"
+          :style="{
+            left: Math.random() * 100 + '%',
+            animationDelay: Math.random() * 3 + 's',
+            animationDuration: 1.5 + Math.random() * 1 + 's'
+          }"
+        />
       </div>
 
       <!-- 中央内容 -->
@@ -96,7 +109,17 @@ onUnmounted(() => {
         <!-- Logo -->
         <div class="logo-ring" :class="{ 'logo-simple': !isFirstBoot }">
           <div class="logo-glow" />
-          <svg class="logo-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            class="logo-icon"
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
@@ -123,7 +146,12 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: linear-gradient(160deg, #070b1a 0%, #0e1628 50%, #0a0f22 100%);
+  background: linear-gradient(
+    160deg,
+    var(--bg-primary) 0%,
+    var(--bg-secondary) 50%,
+    var(--bg-primary) 100%
+  );
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -150,10 +178,20 @@ onUnmounted(() => {
 }
 
 @keyframes rain {
-  0% { transform: translateY(-20px); opacity: 0; }
-  20% { opacity: 0.6; }
-  80% { opacity: 0.6; }
-  100% { transform: translateY(100vh); opacity: 0; }
+  0% {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  80% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
 }
 
 /* 中央内容 */
@@ -186,8 +224,15 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.3); opacity: 1; }
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
 }
 
 .logo-icon {
@@ -197,14 +242,19 @@ onUnmounted(() => {
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }
 
 .app-name {
   font-size: 28px;
   font-weight: 800;
-  color: #e2e8f0;
+  color: var(--text-primary);
   letter-spacing: 2px;
   margin: 0;
   background: linear-gradient(135deg, #818cf8, #c084fc);
@@ -215,7 +265,7 @@ onUnmounted(() => {
 
 .status-text {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   font-weight: 400;
 }
@@ -224,7 +274,7 @@ onUnmounted(() => {
 .progress-bar {
   width: 200px;
   height: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--text-secondary) 15%, transparent);
   border-radius: 10px;
   overflow: hidden;
   margin-top: 8px;
@@ -240,16 +290,24 @@ onUnmounted(() => {
 }
 
 @keyframes loading {
-  0% { transform: translateX(-100%); width: 30%; }
-  50% { width: 60%; }
-  100% { transform: translateX(400%); width: 30%; }
+  0% {
+    transform: translateX(-100%);
+    width: 30%;
+  }
+  50% {
+    width: 60%;
+  }
+  100% {
+    transform: translateX(400%);
+    width: 30%;
+  }
 }
 
 .version {
   position: absolute;
   bottom: 32px;
   font-size: 12px;
-  color: #334155;
+  color: var(--text-tertiary, #64748b);
   margin: 0;
 }
 
