@@ -9,7 +9,7 @@ import App from './App.vue'
 import router from './router'
 import pinia from './stores'
 import { notifyError } from './utils/feedback'
-import { getChatPrefs, applyChatPrefs } from './utils/chat-prefs'
+import { getChatPrefs, applyChatPrefs } from '@renderer/utils'
 import 'highlight.js/styles/github-dark.min.css'
 import './styles/global.css'
 
