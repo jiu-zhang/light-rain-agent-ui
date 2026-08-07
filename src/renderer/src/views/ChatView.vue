@@ -86,6 +86,16 @@ const turns = computed<ChatTurn[]>(() => {
       last.streaming = true
     }
   }
+  // AI 尚未开始输出任何事件时，追加"思考中"占位回合，
+  // 使其作为消息流的一部分紧跟在用户提问下方渲染（而非固定在容器底部）
+  if (showLoading.value) {
+    result.push({
+      uid: 'loading-placeholder',
+      role: 'assistant',
+      events: [],
+      streaming: true
+    })
+  }
   return result
 })
 
@@ -383,17 +393,6 @@ onMounted(async () => {
             @regenerate="handleRegenerate"
             @scroll="onMessagesScroll"
           />
-
-          <div v-if="showLoading" class="loading-row">
-            <div class="loading-avatar"><Icon name="robot" :size="16" /></div>
-            <div class="loading-bubble">
-              <div class="loading-indicator">
-                <div class="loading-ring" />
-                <div class="loading-dots"><span /><span /><span /></div>
-              </div>
-              <span class="loading-text">AI 思考中</span>
-            </div>
-          </div>
         </div>
 
         <!-- 右侧悬浮栏：提问目录 + 滚动条（悬停显示） -->
@@ -789,100 +788,5 @@ onMounted(async () => {
 
 .rail-thumb:hover {
   background: var(--accent-primary);
-}
-.loading-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 6px;
-  align-self: flex-start;
-  animation: fadeIn 0.3s ease;
-}
-.loading-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: white;
-  margin-top: 4px;
-  background: linear-gradient(135deg, #38bdf8, #a78bfa);
-  box-shadow: 0 2px 8px rgba(56, 189, 248, 0.25);
-}
-.loading-bubble {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--border-glass);
-  border-radius: 4px 18px 18px 18px;
-}
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.loading-indicator {
-  position: relative;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-}
-.loading-ring {
-  position: absolute;
-  inset: 0;
-  border: 2px solid rgba(96, 165, 250, 0.15);
-  border-top-color: #60a5fa;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.loading-dots {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-.loading-dots span {
-  width: 4px;
-  height: 4px;
-  background: linear-gradient(135deg, #60a5fa, #34d399);
-  border-radius: 50%;
-  animation: bounce 1.4s ease-in-out infinite;
-}
-.loading-dots span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.loading-dots span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-@keyframes bounce {
-  0%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.5;
-  }
-  50% {
-    transform: translateY(-4px);
-    opacity: 1;
-  }
-}
-.loading-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
 }
 </style>
