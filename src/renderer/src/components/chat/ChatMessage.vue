@@ -346,6 +346,15 @@ watch(
 
         <!-- AI 回复：思考/工具/正文等统一归入一个气泡 -->
         <template v-else>
+          <!-- AI 尚未输出任何事件时的"思考中"占位（紧随用户提问下方） -->
+          <div v-if="streaming && !turn.events.length" class="thinking-block">
+            <div class="thinking-indicator">
+              <div class="thinking-ring" />
+              <div class="thinking-dots"><span /><span /><span /></div>
+            </div>
+            <span class="thinking-text">AI 思考中</span>
+          </div>
+
           <div v-for="evt in renderableEvents" :key="evt.uid" class="turn-event">
             <!-- 计划：聚合为单一时间线（在 PLAN_START 处渲染） -->
             <PlanTimeline
@@ -566,6 +575,81 @@ watch(
 }
 .is-user .msg-attachments {
   justify-content: flex-end;
+}
+
+/* AI 思考中占位（流式输出前，紧跟用户提问下方） */
+.thinking-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  animation: thinkingIn 0.3s ease;
+}
+@keyframes thinkingIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.thinking-indicator {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.thinking-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(96, 165, 250, 0.15);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: thinkingSpin 0.8s linear infinite;
+}
+@keyframes thinkingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.thinking-dots {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.thinking-dots span {
+  width: 4px;
+  height: 4px;
+  background: linear-gradient(135deg, #60a5fa, #34d399);
+  border-radius: 50%;
+  animation: thinkingBounce 1.4s ease-in-out infinite;
+}
+.thinking-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.thinking-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes thinkingBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+.thinking-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 .msg-attach-item {
   position: relative;

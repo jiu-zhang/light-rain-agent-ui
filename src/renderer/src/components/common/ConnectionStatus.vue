@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { notifyError } from '@renderer/utils/feedback'
-import api from '@renderer/api'
+import api, { setBackendPort } from '@renderer/api'
 import Icon, { type IconName } from './Icon.vue'
+
+/** 后端默认端口（与主进程 DEFAULT_BACKEND_PORT 保持一致） */
+const DEFAULT_BACKEND_PORT = 18080
 
 enum ConnectionState {
   UNKNOWN = 'unknown',
@@ -19,6 +22,12 @@ const statusMessage = ref('检测连接状态...')
 
 let pingInterval: number | null = null
 let reconnectTimeout: number | null = null
+let disposeBackendReady: (() => void) | null = null
+
+/** 后端地址是否已就绪（生产环境需等主进程通知端口） */
+function backendConfigured(): boolean {
+  return (api.defaults.baseURL ?? '').startsWith('http')
+}
 
 const stateConfig: Record<ConnectionState, { icon: IconName; color: string; label: string }> = {
   [ConnectionState.UNKNOWN]: {
@@ -57,10 +66,11 @@ function checkConnection(): Promise<boolean> {
     .catch(() => false)
 }
 
-/** 后端健康检查地址：file:// 下相对路径会解析失败，必须用绝对地址 */
+/** 后端健康检查地址：file:// 下相对路径会解析失败，必须用绝对地址；未配置端口时回退默认端口探测 */
 function healthCheckUrl(): string {
   const base = api.defaults.baseURL ?? ''
-  return base.startsWith('http') ? `${base}/api/health` : '/api/health'
+  if (base.startsWith('http')) return `${base}/api/health`
+  return `http://127.0.0.1:${DEFAULT_BACKEND_PORT}/api/health`
 }
 
 async function ping(): Promise<void> {
@@ -92,6 +102,12 @@ async function ping(): Promise<void> {
 }
 
 function attemptReconnect(): void {
+  // 后端端口尚未就绪（生产环境启动初期）：静默等待，不计数、不弹窗
+  if (!backendConfigured()) {
+    reconnectTimeout = window.setTimeout(ping, 3000)
+    return
+  }
+
   if (reconnectAttempts.value > 10) {
     state.value = ConnectionState.ERROR
     statusMessage.value = '连接失败，请检查后端服务'
@@ -111,11 +127,20 @@ function attemptReconnect(): void {
 }
 
 onMounted(() => {
+  // 生产环境等主进程通知后端端口；开发环境 baseURL 为 /api（Vite proxy）
+  disposeBackendReady = window.api.onBackendReady(({ port, dev }) => {
+    if (!dev) {
+      setBackendPort(port)
+    }
+    ping()
+  })
+
   ping()
   pingInterval = window.setInterval(ping, 10000)
 })
 
 onBeforeUnmount(() => {
+  disposeBackendReady?.()
   if (pingInterval) {
     clearInterval(pingInterval)
     pingInterval = null

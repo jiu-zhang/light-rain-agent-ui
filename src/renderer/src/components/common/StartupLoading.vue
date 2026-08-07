@@ -2,6 +2,9 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import api, { setBackendPort } from '@renderer/api/index'
 
+/** 后端默认端口（与主进程 DEFAULT_BACKEND_PORT 保持一致） */
+const DEFAULT_BACKEND_PORT = 18080
+
 declare const __APP_VERSION__: string
 const appVersion = __APP_VERSION__
 
@@ -26,12 +29,11 @@ async function probeBackend(): Promise<boolean> {
   }
 }
 
-/** 探测地址：file:// 下相对路径会解析失败，必须用绝对地址 */
+/** 探测地址：file:// 下相对路径会解析失败，必须用绝对地址；未配置端口时回退默认端口探测 */
 function probeUrl(): string {
   const base = api.defaults.baseURL ?? ''
-  return base.startsWith('http')
-    ? `${base}/api/ai/providers/list-all`
-    : '/api/ai/providers/list-all'
+  if (base.startsWith('http')) return `${base}/api/ai/providers/list-all`
+  return `http://127.0.0.1:${DEFAULT_BACKEND_PORT}/api/ai/providers/list-all`
 }
 
 onMounted(async () => {
