@@ -61,3 +61,9 @@ git push origin master --tags
 应用内置 `electron-updater`，以 GitHub Releases 作为更新源。用户安装应用后，后续发布新版本时会自动静默下载并安装，无需手动操作。
 
 可以添加几种模式，让用户选择，把一些需要经常操作的功能放到一起
+
+打包发生在 GitHub Actions，不在本地：
+1. 推送 `v*` tag 后，`.github/workflows/release.yml` 会在 GitHub 服务器上执行 `npm run build:win`
+2. electron-builder 通过 `extraResources`（electron-builder.yml:45-51）把 `resources/backend/` 和 `resources/runtime/` 打进安装包
+3. 因此 `resources/backend/`（含 light-rain-agent.jar）与 `resources/runtime/`（JRE）必须提交进 git，CI 才能拿到
+4. 生成安装包与 `latest.yml` 后，上传到对应 tag 的 GitHub Release，作为自动更新源
