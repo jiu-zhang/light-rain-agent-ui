@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
+import MarkdownContent from './MarkdownContent.vue'
 import type { ChatEvent } from '@renderer/types'
 
 const props = defineProps<{
@@ -32,7 +33,16 @@ function toolContentInfo(evt: ChatEvent): { name: string; result: string } | nul
   try {
     const p = JSON.parse(evt.content)
     const data = p.responseData !== undefined ? p.responseData : p
-    const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    let text = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    // 部分工具返回值经 Spring AI 包装后本身是 JSON 字符串（首尾带引号），剥掉一层避免显示多余引号
+    if (typeof text === 'string' && text.startsWith('"') && text.endsWith('"')) {
+      try {
+        const decoded = JSON.parse(text)
+        if (typeof decoded === 'string') text = decoded
+      } catch {
+        // 非 JSON 字符串，保持原样
+      }
+    }
     return { name: p.name || 'tool', result: text }
   } catch {
     return null
@@ -55,6 +65,21 @@ const header = (): { title: string; icon: IconName; detail: string } => {
     detail: info?.result ?? props.evt.content ?? ''
   }
 }
+
+/**
+ * 判断工具结果是否为结构化 markdown：
+ * 仅当内容包含 markdown 特征（标题/表格/加粗/列表/代码块）时走 Markdown 渲染，
+ * 否则（纯文本文件列表、命令输出、JSON 等）保持 <pre> 原样，避免 `---` 变分隔线、
+ * 文件名列表被误解析成段落。
+ */
+function isMarkdownLike(text: string): boolean {
+  return (
+    /(^|\n)\s{0,3}#{1,6}\s|\|.*\|/m.test(text) ||
+    /\*\*[^*]+\*\*/.test(text) ||
+    /(^|\n)\s{0,3}([-*+]|\d+[.)])\s/.test(text) ||
+    /(^|\n)```/.test(text)
+  )
+}
 </script>
 
 <template>
@@ -69,7 +94,13 @@ const header = (): { title: string; icon: IconName; detail: string } => {
       <Icon name="chevron-down" :size="13" class="tool-arrow" :class="{ open }" />
     </div>
     <div v-if="open" class="tool-detail">
-      <pre>{{ header().detail }}</pre>
+      <!-- 结构化 markdown 结果走 MarkdownContent；纯文本/命令输出/JSON 保持 <pre> 原样 -->
+      <MarkdownContent
+        v-if="kind === 'result' && isMarkdownLike(header().detail)"
+        :content="header().detail"
+        class="tool-detail-md"
+      />
+      <pre v-else>{{ header().detail }}</pre>
     </div>
   </div>
 </template>
@@ -167,6 +198,17 @@ const header = (): { title: string; icon: IconName; detail: string } => {
 
 .tool-detail {
   padding: 0 12px 10px;
+}
+
+.tool-detail-md {
+  max-height: 240px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .tool-detail pre {
