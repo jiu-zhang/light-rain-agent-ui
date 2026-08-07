@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount } from 'vue'
-import { initTheme, getShortcut, matchesAccelerator, SHORTCUTS } from '@renderer/utils'
+import { getShortcut, matchesAccelerator, SHORTCUTS } from '@renderer/utils'
 import { useUiStore } from '@renderer/stores'
 import Sidebar from '@renderer/components/layout/Sidebar.vue'
 import UpdateDialog from '@renderer/components/common/UpdateDialog.vue'
@@ -18,7 +18,6 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 onMounted(() => {
-  initTheme()
   window.addEventListener('keydown', onKeydown)
   const toggleWindow = getShortcut('toggleWindow')
   const defaultWindow = SHORTCUTS.find((s) => s.id === 'toggleWindow')?.default ?? ''
