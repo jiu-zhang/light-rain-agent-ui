@@ -1,6 +1,6 @@
 {
   "name": "light-rain",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "LightRain - AI 智能助手桌面应用",
   "main": "./out/main/index.js",
   "author": "jiu-zhang",
