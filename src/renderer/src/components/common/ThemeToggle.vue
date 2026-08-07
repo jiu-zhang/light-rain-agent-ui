@@ -23,6 +23,12 @@ const themeOptions: { mode: ThemeMode; icon: IconName; label: string; gradient: 
     icon: 'monitor',
     label: '跟随系统',
     gradient: 'linear-gradient(135deg, #06b6d4, #3b82f6)'
+  },
+  {
+    mode: 'custom',
+    icon: 'palette',
+    label: '自定义',
+    gradient: 'linear-gradient(135deg, #ec4899, #8b5cf6)'
   }
 ]
 

@@ -53,6 +53,9 @@ const api = {
   // 快捷键：更新主进程注册的全局快捷键
   updateShortcut: (id: string, accelerator: string): void =>
     ipcRenderer.send('shortcut-update', { id, accelerator }),
+  // 主题：同步主进程的窗口标题栏颜色与系统 UI 主题
+  setTheme: (payload: { mode: string; theme: string; bg: string }): void =>
+    ipcRenderer.send('theme-changed', payload),
   // 获取本地文件的绝对路径（配合聊天附件"引用原文件"使用）
   getPathForFile: (file: File): string => webUtils.getPathForFile(file)
 }

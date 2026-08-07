@@ -47,8 +47,11 @@ defineEmits<{ openSettings: []; newSession: []; toggleExec: [] }>()
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
-  pointer-events: none;
+  /* 右侧 176px 预留原生窗口控制按钮（最小化/最大化/关闭）区域 */
+  padding: 14px 176px 14px 24px;
+  /* 隐藏原生标题栏后，顶栏作为窗口拖拽区 */
+  -webkit-app-region: drag;
+  user-select: none;
   transition: opacity 0.3s var(--ease-out);
 }
 
@@ -57,6 +60,7 @@ defineEmits<{ openSettings: []; newSession: []; toggleExec: [] }>()
   align-items: center;
   gap: 10px;
   pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .logo {
@@ -134,6 +138,7 @@ defineEmits<{ openSettings: []; newSession: []; toggleExec: [] }>()
   align-items: center;
   gap: 10px;
   pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .exec-btn {

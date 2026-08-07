@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import Icon from '@renderer/components/common/Icon.vue'
 
 interface PlanStepView {
@@ -16,28 +17,32 @@ interface PlanView {
   steps: PlanStepView[]
 }
 
-defineProps<{
+const props = defineProps<{
   /** 聚合后的计划时间线视图数据 */
   planView: PlanView
   /** 计划是否仍在执行中（存在运行中的步骤） */
   active: boolean
 }>()
 
-/** 获取计划状态文本 */
-function getStatusText(status: string): string {
-  switch (status) {
-    case 'RUNNING':
-      return '执行中'
-    case 'COMPLETED':
-      return '已完成'
-    case 'CANCELLED':
-      return '已取消'
-    case 'FAILED':
-      return '失败'
-    default:
-      return status
-  }
+/** 状态文本映射，避免重复的 switch 计算 */
+const statusTextMap: Record<string, string> = {
+  RUNNING: '执行中',
+  COMPLETED: '已完成',
+  CANCELLED: '已取消',
+  FAILED: '失败'
 }
+
+/** 带有状态信息的步骤计算 */
+const optimizedSteps = computed(() => {
+  return props.planView.steps.map((step) => ({
+    ...step,
+    statusClass: step.status.toLowerCase(),
+    statusText: statusTextMap[step.status] || step.status,
+    showNodeIcon:
+      step.status === 'COMPLETED' || step.status === 'RUNNING' || step.status === 'FAILED',
+    shouldShowTag: step.status !== 'WAITING'
+  }))
+})
 </script>
 
 <template>
@@ -53,12 +58,7 @@ function getStatusText(status: string): string {
       <div class="ptl-progress-bar" :style="{ width: planView.percent + '%' }" />
     </div>
     <ol class="ptl-steps">
-      <li
-        v-for="s in planView.steps"
-        :key="s.index"
-        class="ptl-step"
-        :class="s.status.toLowerCase()"
-      >
+      <li v-for="s in optimizedSteps" :key="s.index" class="ptl-step" :class="s.statusClass">
         <span class="ptl-node">
           <Icon v-if="s.status === 'COMPLETED'" name="check" :size="12" />
           <Icon v-else-if="s.status === 'RUNNING'" name="loader" :size="12" class="ptl-spin" />
@@ -69,10 +69,17 @@ function getStatusText(status: string): string {
           <span class="ptl-name">{{ s.name }}</span>
           <span v-if="s.error" class="ptl-error" :title="s.error">{{ s.error }}</span>
         </div>
-        <span v-if="s.status === 'RUNNING'" class="ptl-tag running">执行中</span>
-        <span v-else-if="s.status === 'COMPLETED'" class="ptl-tag done">已完成</span>
-        <span v-else-if="s.status === 'FAILED'" class="ptl-tag failed">失败</span>
-        <span v-else class="ptl-tag">{{ getStatusText(s.status) }}</span>
+        <span
+          v-if="s.shouldShowTag"
+          class="ptl-tag"
+          :class="{
+            running: s.status === 'RUNNING',
+            done: s.status === 'COMPLETED',
+            failed: s.status === 'FAILED'
+          }"
+        >
+          {{ s.statusText }}
+        </span>
       </li>
     </ol>
   </div>

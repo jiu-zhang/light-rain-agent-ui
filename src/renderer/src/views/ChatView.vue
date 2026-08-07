@@ -5,17 +5,32 @@ import { useChatStore } from '@renderer/stores'
 import { providerApi } from '@renderer/api/provider'
 import type { Attachment, ChatTurn, ProviderWithSimpleModels } from '@renderer/types'
 import TopBar from '@renderer/components/layout/TopBar.vue'
-import ChatMessage from '@renderer/components/chat/ChatMessage.vue'
 import ChatInput from '@renderer/components/chat/ChatInput.vue'
 import ExecutionPanel from '@renderer/components/chat/ExecutionPanel.vue'
 import InputDialog from '@renderer/components/chat/InputDialog.vue'
+import VirtualMessageList from '@renderer/components/chat/VirtualMessageList.vue'
 import Icon from '@renderer/components/common/Icon.vue'
 import type { SendOptions } from '@renderer/stores/chat'
 
 const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
-const messagesContainer = ref<HTMLElement | null>(null)
+
+/**
+ * 消息滚动容器能力（VirtualMessageList 暴露，兼容原生滚动容器调用方式）
+ */
+interface ScrollContainerLike {
+  scrollTo(options: { top?: number; left?: number; behavior?: string }): void
+  scrollToBottom(): void
+  scrollToMessage(uid: string): void
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+  getBoundingClientRect(): DOMRect
+  querySelector<T extends Element>(selectors: string): T | null
+}
+
+const messagesContainer = ref<ScrollContainerLike | null>(null)
 const enabledProviders = ref<ProviderWithSimpleModels[]>([])
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null)
 
@@ -88,7 +103,11 @@ function scrollToBottom(): void {
   nextTick(() => {
     const c = messagesContainer.value
     if (!c) return
-    c.scrollTo({ top: c.scrollHeight })
+    if (typeof c.scrollToBottom === 'function') {
+      c.scrollToBottom()
+    } else {
+      c.scrollTo({ top: c.scrollHeight })
+    }
     onMessagesScroll()
   })
 }
@@ -237,6 +256,11 @@ async function loadOlderIfAtTop(): Promise<void> {
 function scrollToMessage(uid: string): void {
   const c = messagesContainer.value
   if (!c) return
+  // 虚拟列表：按高度表直接定位（目标消息可能未渲染）
+  if (typeof c.scrollToMessage === 'function') {
+    c.scrollToMessage(uid)
+    return
+  }
   const el = c.querySelector<HTMLElement>(`[data-uid="${uid}"]`)
   if (!el) return
   const target = c.scrollTop + (el.getBoundingClientRect().top - c.getBoundingClientRect().top) - 70
@@ -347,18 +371,19 @@ onMounted(async () => {
         </div>
       </div>
       <div v-show="!showEmpty" class="chat-scroll-wrap">
-        <div ref="messagesContainer" class="messages-area" @scroll="onMessagesScroll">
+        <div class="messages-area">
           <div v-if="chatStore.hasMoreMessages || chatStore.loadingOlder" class="history-loader">
             <Icon v-if="chatStore.loadingOlder" name="loader" :size="13" class="spin" />
             <span>{{ chatStore.loadingOlder ? '正在加载更早消息...' : '滑动加载更多消息' }}</span>
           </div>
-          <ChatMessage
-            v-for="turn in turns"
-            :key="turn.uid"
-            :turn="turn"
-            :streaming="turn.streaming"
+
+          <VirtualMessageList
+            ref="messagesContainer"
+            :messages="turns"
             @regenerate="handleRegenerate"
+            @scroll="onMessagesScroll"
           />
+
           <div v-if="showLoading" class="loading-row">
             <div class="loading-avatar"><Icon name="robot" :size="16" /></div>
             <div class="loading-bubble">
@@ -584,16 +609,17 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .messages-area {
-  height: 100%;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   padding: 70px 24px 40px;
   display: flex;
   flex-direction: column;
-  gap: var(--chat-msg-gap, 8px);
-  scrollbar-width: none;
 }
 .messages-area::-webkit-scrollbar {
   display: none;
@@ -608,7 +634,12 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-tertiary);
   user-select: none;
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary);
+  z-index: 10;
 }
+
 .spin {
   animation: spin 0.8s linear infinite;
 }

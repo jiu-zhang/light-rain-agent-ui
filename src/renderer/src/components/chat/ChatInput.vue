@@ -4,6 +4,16 @@ import type { ProviderWithSimpleModels, Attachment } from '@renderer/types'
 import { chatApi } from '@renderer/api/chat'
 import { notifyError } from '@renderer/utils/feedback'
 import Icon from '@renderer/components/common/Icon.vue'
+import type { IconName } from '@renderer/components/common/Icon.vue'
+
+/** 厂商图标映射 */
+const providerIconMap: Record<string, IconName> = {
+  deepseek: 'robot',
+  openai: 'brain',
+  dashscope: 'cpu',
+  ollama: 'server',
+  siliconflow: 'box'
+}
 
 const MODEL_SEL_KEY = 'agent-ui-selected-model-id'
 const AGENT_MODE_KEY = 'agent-ui-agent-mode'
@@ -291,6 +301,14 @@ defineExpose({ agentMode, planMode, deepThink, selectedModelId })
         @change="onFileSelected"
       />
 
+      <!-- 拖拽提示层 -->
+      <div v-if="dragOver" class="drag-area">
+        <div class="drag-area-content">
+          <Icon name="image" :size="28" class="drag-icon" />
+          拖拽图片到这里上传
+        </div>
+      </div>
+
       <!-- 已选附件预览条 -->
       <div v-if="attachments.length" class="attachment-bar">
         <div
@@ -436,10 +454,13 @@ defineExpose({ agentMode, planMode, deepThink, selectedModelId })
                   :class="{ active: selectedModelId === m.id }"
                   @click="selectModel(m.id)"
                 >
-                  <span v-if="m.isDefault" class="dropdown-default"
-                    ><Icon name="star" :size="11"
-                  /></span>
-                  {{ m.name }}
+                  <Icon :name="providerIconMap[p.code] || 'cpu'" :size="11" class="model-icon" />
+                  <span class="model-text">
+                    <span v-if="m.isDefault" class="dropdown-default"
+                      ><Icon name="star" :size="10"
+                    /></span>
+                    {{ m.name }}
+                  </span>
                 </div>
               </div>
               <div v-if="enabledModels.length === 0" class="dropdown-empty">暂无可用模型</div>
@@ -712,6 +733,38 @@ defineExpose({ agentMode, planMode, deepThink, selectedModelId })
   gap: 4px;
   font-size: 11px;
   color: var(--text-quaternary);
+}
+
+/* 文件拖拽区域 */
+.drag-area {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
+  border: 2px dashed var(--accent-primary);
+  border-radius: var(--radius-lg);
+  color: var(--accent-primary);
+  font-weight: 600;
+  font-size: 13px;
+  backdrop-filter: blur(12px);
+  animation: pulse 1.5s infinite;
+  z-index: 10;
+}
+
+.drag-area-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.drag-icon {
+  opacity: 0.7;
 }
 
 /* 命令栏：内嵌于输入框底部的工具条 */
@@ -1054,7 +1107,27 @@ defineExpose({ agentMode, planMode, deepThink, selectedModelId })
 .dropdown-default {
   color: #fbbf24;
   display: flex;
+  margin-right: 2px;
 }
+
+.model-icon {
+  color: var(--text-tertiary);
+  margin-right: 6px;
+  opacity: 0.8;
+}
+
+.dropdown-option:hover .model-icon,
+.dropdown-option.active .model-icon {
+  opacity: 1;
+  color: var(--accent-primary);
+}
+
+.model-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .dropdown-empty {
   padding: 14px;
   text-align: center;

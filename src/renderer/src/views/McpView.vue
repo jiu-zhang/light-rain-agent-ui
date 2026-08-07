@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { mcpApi, type McpConfig, type McpConfigForm } from '@renderer/api/mcp'
 import Icon from '@renderer/components/common/Icon.vue'
+import ConfirmDialog from '@renderer/components/common/ConfirmDialog.vue'
 import { notifySuccess } from '@renderer/utils/feedback'
 
 const configs = ref<McpConfig[]>([])
@@ -336,35 +337,15 @@ onMounted(loadConfigs)
     </div>
 
     <!-- 删除确认弹框 -->
-  <div v-if="showDeleteConfirm" class="modal-inner-overlay" @click.self="cancelDelete">
-    <div class="modal-inner-box" style="max-width: 420px">
-      <h3 style="color: var(--accent-error); margin-bottom: 12px">
-        <Icon name="trash" :size="16" />
-        确认删除 MCP 服务器
-      </h3>
-      <p style="color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px">
-        您即将删除 MCP 服务器：<br />
-        <strong style="color: var(--text-primary)">{{ configToDelete?.name }}</strong>
-      </p>
-      <div style="background: color-mix(in srgb, var(--accent-error) 8%, var(--bg-primary)); 
-                  border: 1px solid color-mix(in srgb, var(--accent-error) 20%, transparent); 
-                  border-radius: var(--radius-md); padding: 12px; margin-bottom: 20px">
-        <p style="color: var(--accent-error); margin: 0; font-size: 12px; display: flex; align-items: center; gap: 6px">
-          <Icon name="alert-triangle" :size="12" />
-          删除后无法恢复，请谨慎操作
-        </p>
-      </div>
-      <div class="form-actions" style="margin: 0">
-        <button class="action-btn" @click="cancelDelete">取消</button>
-        <button class="action-btn primary" style="--btn-bg: var(--danger-gradient); 
-                                                     --btn-color: white; 
-                                                     box-shadow: var(--glow-error)" 
-                @click="handleDelete">
-          确认删除
-        </button>
-      </div>
-    </div>
-  </div>
+  <ConfirmDialog
+    v-if="showDeleteConfirm"
+    title="确认删除 MCP 服务器"
+    :message="`您即将删除 MCP 服务器：${configToDelete?.name}\n\n删除后无法恢复，请谨慎操作。`"
+    confirm-text="确认删除"
+    cancel-text="取消"
+    @confirm="handleDelete"
+    @cancel="cancelDelete"
+  />
   </div>
 </template>
 

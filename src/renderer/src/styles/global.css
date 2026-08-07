@@ -217,6 +217,18 @@ select:focus {
   align-items: flex-end;
   justify-content: space-between;
   margin-bottom: var(--space-xl);
+  /* 隐藏原生标题栏后，页面头部作为窗口拖拽区；右侧预留窗口控制按钮区域 */
+  -webkit-app-region: drag;
+  padding-right: 150px;
+  user-select: none;
+}
+
+/* 头部内的可交互元素恢复可点击 */
+.view-header > .header-actions,
+.page-header > .header-actions,
+.view-header > .action-btn,
+.page-header > .action-btn {
+  -webkit-app-region: no-drag;
 }
 
 .header-content {
@@ -409,6 +421,28 @@ select:focus {
 .action-btn.primary:active {
   transform: scale(0.97);
   filter: brightness(0.96);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
 }
 
 .action-btn.sm {
