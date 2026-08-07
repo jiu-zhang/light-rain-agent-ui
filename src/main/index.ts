@@ -18,6 +18,7 @@ import { spawn, type ChildProcess } from 'child_process'
 import * as net from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
+import { mirror, MIRRORS } from './updater'
 import icon from '../../resources/icon.png?asset'
 import { DEFAULT_BACKEND_PORT } from '../shared/constants'
 
@@ -396,8 +397,16 @@ app.whenReady().then(() => {
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = false
 
+    let retryCount = 0
+
     autoUpdater.on('error', (err) => {
       console.error('[AutoUpdater]', err.message)
+      // 下载失败时切换到下一个镜像重试
+      if (retryCount < MIRRORS.length && mirror.next()) {
+        retryCount++
+        console.log('[AutoUpdater] 切换镜像重试')
+        autoUpdater.checkForUpdates()
+      }
     })
 
     autoUpdater.on('update-available', (info) => {
@@ -428,7 +437,11 @@ app.whenReady().then(() => {
     ipcMain.on('start-update-download', () => autoUpdater.downloadUpdate())
     ipcMain.on('restart-and-install', () => autoUpdater.quitAndInstall())
 
-    setTimeout(() => autoUpdater.checkForUpdates(), 3000)
+    // 先测速选择最快的更新镜像，再检查更新
+    setTimeout(async () => {
+      await mirror.init()
+      autoUpdater.checkForUpdates()
+    }, 3000)
   }
 
   app.on('activate', () => {
