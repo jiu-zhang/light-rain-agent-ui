@@ -8,6 +8,10 @@ import Icon from '@renderer/components/common/Icon.vue'
 const MODEL_SEL_KEY = 'agent-ui-selected-model-id'
 const AGENT_MODE_KEY = 'agent-ui-agent-mode'
 const PLAN_MODE_KEY = 'agent-ui-plan-mode'
+const DEEP_THINK_KEY = 'agent-ui-deep-think'
+
+/** 支持深度思考的厂商 code（DeepSeek 不支持，不显示开关） */
+const DEEP_THINK_PROVIDERS = ['dashscope', 'openai', 'ollama']
 
 /** 待发送附件（uploading 为上传中状态标记） */
 interface PendingAttachment extends Attachment {
@@ -26,11 +30,15 @@ const emit = defineEmits<{
 
 const inputText = ref('')
 const showModelPicker = ref(false)
+const showModePopover = ref(false)
 const agentMode = ref(
   typeof localStorage !== 'undefined' && localStorage.getItem(AGENT_MODE_KEY) === '1'
 )
 const planMode = ref(
   typeof localStorage !== 'undefined' && localStorage.getItem(PLAN_MODE_KEY) === '1'
+)
+const deepThink = ref(
+  typeof localStorage !== 'undefined' && localStorage.getItem(DEEP_THINK_KEY) === '1'
 )
 const selectedModelId = ref<number | null>(null)
 
@@ -74,7 +82,23 @@ const currentModelLabel = computed(() => {
   return m ? `${m.providerName} · ${m.name}` : '选择模型'
 })
 
+/** 当前选中模型的厂商 code（用于按厂商显示深度思考开关） */
+const currentProviderCode = computed(
+  () =>
+    props.enabledProviders.find((p) => p.models.some((m) => m.id === selectedModelId.value))
+      ?.code ?? ''
+)
+
+const supportsDeepThink = computed(() => DEEP_THINK_PROVIDERS.includes(currentProviderCode.value))
+
 const canSend = computed(() => inputText.value.trim().length > 0 || attachments.value.length > 0)
+
+/** 已开启的智能模式数量（用于命令栏角标） */
+const activeModeCount = computed(
+  () =>
+    [agentMode.value, planMode.value, deepThink.value && supportsDeepThink.value].filter(Boolean)
+      .length
+)
 
 function selectModel(id: number): void {
   selectedModelId.value = id
@@ -92,6 +116,11 @@ function togglePlanMode(): void {
   localStorage.setItem(PLAN_MODE_KEY, planMode.value ? '1' : '0')
 }
 
+function toggleDeepThink(): void {
+  deepThink.value = !deepThink.value
+  localStorage.setItem(DEEP_THINK_KEY, deepThink.value ? '1' : '0')
+}
+
 /** 是否图片类型（用于缩略图展示） */
 function isImageType(mimeType?: string): boolean {
   return !!mimeType && mimeType.startsWith('image/')
@@ -107,12 +136,12 @@ function onFileSelected(e: Event): void {
   input.value = ''
 }
 
-/** 添加文件：优先引用本地原文件路径（不落盘副本）；拿不到路径（如剪贴板位图）才上传 */
+/** 添加文件：图片走附件上传；其他类型文件把本地路径插入输入框（供模型直接读取） */
 async function addFiles(files: FileList | File[] | null): Promise<void> {
   if (!files || files.length === 0) return
   for (const file of Array.from(files)) {
     if (!file.type.startsWith('image/')) {
-      notifyError(`仅支持上传图片文件：${file.name}`)
+      insertLocalFilePath(file)
       continue
     }
     const previewUrl = URL.createObjectURL(file)
@@ -160,6 +189,14 @@ function resolveLocalPath(file: File): string {
   } catch {
     return ''
   }
+}
+
+/** 将非图片文件的本地路径插入输入框；拿不到路径时退化为文件名 */
+function insertLocalFilePath(file: File): void {
+  const path = resolveLocalPath(file) || file.name
+  const existing = inputText.value
+  const sep = existing && !/\s$/.test(existing) ? ' ' : ''
+  inputText.value = existing + sep + path
 }
 
 function removeAttachment(index: number): void {
@@ -222,6 +259,7 @@ function handleKeydown(e: KeyboardEvent): void {
 
 function onDocumentClick(): void {
   showModelPicker.value = false
+  showModePopover.value = false
 }
 
 if (typeof document !== 'undefined') {
@@ -231,7 +269,7 @@ if (typeof document !== 'undefined') {
 onBeforeUnmount(() => clearAttachments())
 
 // 暴露给父组件调用
-defineExpose({ agentMode, planMode, selectedModelId })
+defineExpose({ agentMode, planMode, deepThink, selectedModelId })
 </script>
 
 <template>
@@ -307,63 +345,107 @@ defineExpose({ agentMode, planMode, selectedModelId })
           <Icon name="square" :size="14" />
         </button>
       </div>
-    </div>
-    <div class="input-toolbar">
-      <div class="toolbar-left">
-        <div class="toolbar-chip" :class="{ active: agentMode }" @click="toggleAgentMode">
-          <div class="chip-track"><div class="chip-thumb" /></div>
-          <span>{{ agentMode ? 'Agent' : 'Chat' }}</span>
-        </div>
-        <div
-          class="toolbar-chip"
-          :class="{ active: planMode }"
-          title="按计划逐步执行任务"
-          @click="togglePlanMode"
-        >
-          <Icon name="git-branch" :size="12" class="chip-icon plan-icon" />
-          <span>{{ planMode ? '计划' : '普通' }}</span>
-        </div>
-        <div
-          class="toolbar-chip attach-chip"
-          title="上传图片（支持多选 / 粘贴 / 拖拽）"
-          @click="pickFiles"
-        >
-          <Icon name="paperclip" :size="12" class="chip-icon attach-icon" />
-          <span>图片</span>
-        </div>
-        <div
-          class="toolbar-chip model-chip"
-          :class="{ active: showModelPicker }"
-          @click.stop="showModelPicker = !showModelPicker"
-        >
-          <Icon name="bot" :size="12" class="chip-icon" />
-          <span>{{ currentModelLabel }}</span>
-          <Icon name="chevron-down" :size="12" class="chip-arrow" />
-          <div v-if="showModelPicker" class="toolbar-dropdown" @click.stop>
-            <div v-for="p in enabledProviders" :key="p.id" class="dropdown-group">
-              <div class="dropdown-group-label">{{ p.name }}</div>
-              <div
-                v-for="m in p.models"
-                :key="m.id"
-                class="dropdown-option"
-                :class="{ active: selectedModelId === m.id }"
-                @click="selectModel(m.id)"
-              >
-                <span v-if="m.isDefault" class="dropdown-default"
-                  ><Icon name="star" :size="11"
-                /></span>
-                {{ m.name }}
+
+      <!-- 命令栏：高频工具 + 模型选择 -->
+      <div class="input-commandbar">
+        <div class="command-left">
+          <button
+            class="command-btn attach-btn"
+            title="上传图片（支持多选 / 粘贴 / 拖拽）"
+            @click="pickFiles"
+          >
+            <Icon name="paperclip" :size="15" />
+          </button>
+          <div class="mode-wrap">
+            <button
+              class="command-btn mode-btn"
+              :class="{ lit: activeModeCount > 0, open: showModePopover }"
+              title="智能模式：智能体 / 计划 / 深度思考"
+              @click.stop="showModePopover = !showModePopover"
+            >
+              <Icon name="sparkles" :size="15" class="mode-icon" />
+              <span class="mode-label">模式</span>
+              <span v-if="activeModeCount" class="mode-badge">{{ activeModeCount }}</span>
+              <Icon name="chevron-down" :size="12" class="mode-arrow" />
+            </button>
+
+            <!-- 智能模式弹层 -->
+            <Transition name="pop">
+              <div v-if="showModePopover" class="mode-popover" @click.stop>
+                <div class="mode-popover-accent" />
+                <div class="mode-popover-title">
+                  <Icon name="sparkles" :size="13" />
+                  <span>智能模式</span>
+                </div>
+                <div class="mode-row" @click="toggleAgentMode">
+                  <div class="mode-row-icon agent"><Icon name="bot" :size="15" /></div>
+                  <div class="mode-row-text">
+                    <div class="mode-row-name">智能体模式</div>
+                    <div class="mode-row-desc">调用工具自动化完成任务</div>
+                  </div>
+                  <button class="mode-switch" :class="{ on: agentMode }" type="button">
+                    <span />
+                  </button>
+                </div>
+                <div class="mode-row" @click="togglePlanMode">
+                  <div class="mode-row-icon plan"><Icon name="git-branch" :size="15" /></div>
+                  <div class="mode-row-text">
+                    <div class="mode-row-name">计划模式</div>
+                    <div class="mode-row-desc">按计划拆分步骤逐步执行</div>
+                  </div>
+                  <button class="mode-switch" :class="{ on: planMode }" type="button">
+                    <span />
+                  </button>
+                </div>
+                <div v-if="supportsDeepThink" class="mode-row" @click="toggleDeepThink">
+                  <div class="mode-row-icon think"><Icon name="brain" :size="15" /></div>
+                  <div class="mode-row-text">
+                    <div class="mode-row-name">深度思考</div>
+                    <div class="mode-row-desc">模型先深入思考再回答</div>
+                  </div>
+                  <button class="mode-switch" :class="{ on: deepThink }" type="button">
+                    <span />
+                  </button>
+                </div>
+                <div class="mode-hint">
+                  <span class="hint-kbd">Enter</span> 发送
+                  <span class="hint-sep">·</span>
+                  <span class="hint-kbd">Shift+Enter</span> 换行
+                </div>
               </div>
-            </div>
-            <div v-if="enabledModels.length === 0" class="dropdown-empty">暂无可用模型</div>
+            </Transition>
           </div>
         </div>
-      </div>
-      <div class="toolbar-right">
-        <span class="toolbar-hint"
-          ><span class="hint-kbd">Enter</span> 发送 ·
-          <span class="hint-kbd">Shift+Enter</span> 换行</span
-        >
+        <div class="command-right">
+          <div
+            class="command-btn model-chip"
+            :class="{ active: showModelPicker }"
+            title="切换模型"
+            @click.stop="showModelPicker = !showModelPicker"
+          >
+            <span class="model-dot" />
+            <span class="model-name">{{ currentModelLabel }}</span>
+            <Icon name="chevron-down" :size="13" class="model-arrow" />
+            <div v-if="showModelPicker" class="toolbar-dropdown" @click.stop>
+              <div v-for="p in enabledProviders" :key="p.id" class="dropdown-group">
+                <div class="dropdown-group-label">{{ p.name }}</div>
+                <div
+                  v-for="m in p.models"
+                  :key="m.id"
+                  class="dropdown-option"
+                  :class="{ active: selectedModelId === m.id }"
+                  @click="selectModel(m.id)"
+                >
+                  <span v-if="m.isDefault" class="dropdown-default"
+                    ><Icon name="star" :size="11"
+                  /></span>
+                  {{ m.name }}
+                </div>
+              </div>
+              <div v-if="enabledModels.length === 0" class="dropdown-empty">暂无可用模型</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -384,20 +466,74 @@ defineExpose({ agentMode, planMode, selectedModelId })
 .input-container {
   max-width: 760px;
   margin: 0 auto;
-  padding: 10px 14px;
+  padding: 10px 14px 8px;
   background: var(--bg-elevated);
   backdrop-filter: blur(24px);
   border: 1px solid var(--border-glass);
   border-radius: 16px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  position: relative;
 }
 [data-theme='light'] .input-container {
   box-shadow: var(--shadow-sm);
 }
+.input-container::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(96, 165, 250, 0.7),
+    rgba(167, 139, 250, 0.7),
+    transparent
+  );
+  opacity: 0.6;
+  pointer-events: none;
+}
 .input-container:focus-within {
   border-color: var(--border-glass);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(96, 165, 250, 0.16),
+    0 0 28px rgba(96, 165, 250, 0.22),
+    0 0 56px rgba(139, 92, 246, 0.12);
+}
+[data-theme='light'] .input-container:focus-within {
+  box-shadow:
+    var(--shadow-sm),
+    0 0 0 1px rgba(96, 165, 250, 0.18),
+    0 8px 28px rgba(96, 165, 250, 0.2);
+}
+.input-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    rgba(96, 165, 250, 0.35),
+    transparent 30%,
+    transparent 70%,
+    rgba(52, 211, 153, 0.25)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.7;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.input-container:focus-within::after {
+  opacity: 1;
 }
 .input-container.drag-over {
   border-color: var(--accent-primary);
@@ -452,12 +588,25 @@ defineExpose({ agentMode, planMode, selectedModelId })
   color: var(--text-secondary);
 }
 .send-btn.active {
-  background: var(--accent-gradient);
+  background: linear-gradient(135deg, #60a5fa, #8b5cf6, #34d399);
+  background-size: 200% 200%;
   color: white;
-  box-shadow: 0 4px 20px rgba(96, 165, 250, 0.35);
+  animation: btnGlow 2.6s ease-in-out infinite;
+  box-shadow: 0 4px 20px rgba(96, 165, 250, 0.4);
+}
+@keyframes btnGlow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    box-shadow: 0 4px 20px rgba(96, 165, 250, 0.4);
+  }
+  50% {
+    background-position: 100% 50%;
+    box-shadow: 0 4px 26px rgba(139, 92, 246, 0.5);
+  }
 }
 .send-btn.active:hover {
-  box-shadow: 0 6px 28px rgba(96, 165, 250, 0.5);
+  box-shadow: 0 6px 30px rgba(96, 165, 250, 0.55);
   transform: scale(1.05);
 }
 .send-btn:disabled {
@@ -565,97 +714,280 @@ defineExpose({ agentMode, planMode, selectedModelId })
   color: var(--text-quaternary);
 }
 
-.input-toolbar {
-  max-width: 760px;
-  margin: 8px auto 0;
+/* 命令栏：内嵌于输入框底部的工具条 */
+.input-commandbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-glass);
 }
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.toolbar-right {
-  display: flex;
-  align-items: center;
-}
-.toolbar-chip {
+.command-left {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
+}
+.command-right {
+  display: flex;
+  align-items: center;
+}
+.command-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 9px;
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--bg-glass);
-  border: 1px solid var(--border-glass);
+  background: transparent;
+  border: 1px solid transparent;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-tertiary);
   user-select: none;
+  position: relative;
 }
-.toolbar-chip:hover {
+.command-btn:hover {
   border-color: var(--border-accent);
   color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
 }
-.toolbar-chip.active {
+.attach-btn {
+  color: var(--accent-primary);
+}
+.attach-btn:hover {
+  color: var(--accent-primary);
+}
+.mode-btn {
+  gap: 5px;
+}
+.mode-wrap {
+  position: relative;
+  display: flex;
+}
+.mode-btn .mode-icon {
+  color: var(--text-tertiary);
+  transition: all 0.2s;
+}
+.mode-btn:hover .mode-icon {
+  color: var(--accent-primary);
+}
+.mode-btn.lit {
   color: var(--accent-primary);
   border-color: var(--border-accent);
   background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  box-shadow: 0 0 16px rgba(96, 165, 250, 0.18);
 }
-.chip-track {
-  position: relative;
-  width: 28px;
-  height: 14px;
-  background: var(--bg-quaternary);
+.mode-btn.lit .mode-icon {
+  color: var(--accent-primary);
+}
+.mode-btn.open {
+  color: var(--accent-primary);
+  border-color: var(--border-accent);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+.mode-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   border-radius: 999px;
+  background: linear-gradient(135deg, #60a5fa, #8b5cf6);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.mode-arrow {
+  color: var(--text-quaternary);
+  transition: transform 0.2s;
+}
+.mode-btn.open .mode-arrow {
+  transform: rotate(180deg);
+}
+
+/* 智能模式弹层 */
+.mode-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 280px;
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(96, 165, 250, 0.08) inset;
+  z-index: 100;
+  overflow: hidden;
+}
+.mode-popover-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #60a5fa, #8b5cf6, #34d399);
+  opacity: 0.9;
+}
+.mode-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.mode-popover-title .icon {
+  color: var(--accent-primary);
+}
+.mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.mode-row:hover {
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+}
+.mode-row-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mode-row-icon.agent {
+  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
+  color: var(--accent-success);
+}
+.mode-row-icon.plan {
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  color: var(--accent-primary);
+}
+.mode-row-icon.think {
+  background: color-mix(in srgb, #a78bfa 18%, transparent);
+  color: #a78bfa;
+}
+.mode-row-text {
+  flex: 1;
+  min-width: 0;
+}
+.mode-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.mode-row-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+.mode-switch {
+  position: relative;
+  width: 34px;
+  height: 19px;
+  border: none;
+  border-radius: 999px;
+  background: var(--bg-quaternary);
+  cursor: pointer;
   transition: background 0.25s;
+  flex-shrink: 0;
+  padding: 0;
 }
-.toolbar-chip.active .chip-track {
-  background: var(--accent-gradient);
-}
-.chip-thumb {
+.mode-switch span {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 10px;
-  height: 10px;
-  background: var(--text-secondary);
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
+  background: var(--text-secondary);
   transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.toolbar-chip.active .chip-thumb {
-  transform: translateX(14px);
+.mode-switch.on {
+  background: linear-gradient(135deg, #60a5fa, #8b5cf6);
+  box-shadow: 0 0 12px rgba(96, 165, 250, 0.4);
+}
+.mode-switch.on span {
+  transform: translateX(15px);
   background: white;
-  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.4);
+  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.5);
 }
-.attach-chip {
-  color: var(--accent-primary);
+.mode-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px 2px;
+  font-size: 11px;
+  color: var(--text-quaternary);
 }
-.attach-icon {
-  color: var(--accent-primary);
+.mode-hint .hint-sep {
+  margin: 0 2px;
 }
+.hint-kbd {
+  padding: 1px 5px;
+  background: var(--bg-glass);
+  border-radius: 4px;
+  font-family: var(--font-code);
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+/* 弹层过渡动画 */
+.pop-enter-active,
+.pop-leave-active {
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pop-enter-from,
+.pop-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+}
+
+/* 模型选择 */
 .model-chip {
-  position: relative;
   gap: 6px;
-  max-width: 180px;
+  max-width: 200px;
 }
-.chip-icon {
-  color: var(--accent-success);
+.model-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   flex-shrink: 0;
+  background: linear-gradient(135deg, #60a5fa, #34d399);
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.7);
 }
-.plan-icon {
-  color: var(--accent-primary);
+.model-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
 }
-.chip-arrow {
+.model-arrow {
   color: var(--text-quaternary);
   flex-shrink: 0;
   transition: transform 0.2s;
 }
-.model-chip.active .chip-arrow {
+.model-chip.active .model-arrow {
   transform: rotate(180deg);
+}
+.model-chip.active {
+  border-color: var(--border-accent);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
 }
 .toolbar-dropdown {
   position: absolute;
@@ -664,12 +996,14 @@ defineExpose({ agentMode, planMode, selectedModelId })
   min-width: 200px;
   max-height: 300px;
   overflow-y: auto;
-  background: var(--bg-elevated);
-  backdrop-filter: blur(24px);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(24px) saturate(1.4);
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   padding: 6px;
-  box-shadow: var(--shadow-glass-lg);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(96, 165, 250, 0.06) inset;
   z-index: 100;
   animation: dropdownIn 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -726,17 +1060,5 @@ defineExpose({ agentMode, planMode, selectedModelId })
   text-align: center;
   font-size: 12px;
   color: var(--text-quaternary);
-}
-.toolbar-hint {
-  font-size: 11px;
-  color: var(--text-quaternary);
-}
-.hint-kbd {
-  padding: 1px 5px;
-  background: var(--bg-glass);
-  border-radius: 4px;
-  font-family: var(--font-code);
-  font-size: 10px;
-  color: var(--text-tertiary);
 }
 </style>

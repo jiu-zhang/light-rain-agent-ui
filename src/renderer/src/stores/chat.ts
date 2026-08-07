@@ -44,6 +44,8 @@ export interface SendOptions {
   steps?: import('@renderer/types').PlanStep[]
   /** 多模态附件（图片等），随消息发送给模型 */
   attachments?: Attachment[]
+  /** 是否开启深度思考（模型先思考再回答） */
+  deepThink?: boolean
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -512,7 +514,8 @@ export const useChatStore = defineStore('chat', () => {
       plan: options.plan,
       templateId: options.templateId,
       steps: options.steps,
-      attachments: options.attachments
+      attachments: options.attachments,
+      deepThink: options.deepThink
     }
 
     abortController = chatApi.chat(requestPayload, {

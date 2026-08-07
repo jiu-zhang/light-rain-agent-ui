@@ -146,6 +146,7 @@ function sendText(text: string, attachments?: Attachment[]): void {
   const options: SendOptions = {
     agentMode: chatInputRef.value?.agentMode ?? false,
     plan: chatInputRef.value?.planMode ?? false,
+    deepThink: chatInputRef.value?.deepThink ?? false,
     attachments
   }
   chatStore.sendMessage(text, modelId ? String(modelId) : undefined, options)
