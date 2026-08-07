@@ -84,6 +84,8 @@ export interface ChatRequest {
   steps?: PlanStep[]
   /** 附件列表（多模态图片等） */
   attachments?: Attachment[]
+  /** 是否开启深度思考（模型先思考再回答） */
+  deepThink?: boolean
 }
 
 /** 计划步骤 */
