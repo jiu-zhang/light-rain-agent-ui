@@ -16,12 +16,10 @@ const navItems = [
   { path: '/mcp', icon: 'globe', label: 'MCP 服务器' },
   { path: '/cron', icon: 'clock', label: '定时任务' },
   { path: '/executions', icon: 'activity', label: '执行记录' },
-  { path: '/plans', icon: 'git-branch', label: '计划模板' },
+  { path: '/plans', icon: 'git-branch', label: '计划模板' }
 ]
 
-const bottomItems = computed(() => [
-  { path: '/settings', icon: 'settings', label: '设置' }
-])
+const bottomItems = computed(() => [{ path: '/settings', icon: 'settings', label: '设置' }])
 
 /** 沉浸/专注模式：左缘热区 + 临时抽屉 */
 const isHovering = ref(false)
@@ -103,8 +101,15 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
           @click="toggleModeSwitcher"
         >
           <Icon :name="currentModeInfo.icon as any" :size="16" />
-          <span v-show="ui.mode === 'standard'" class="mode-label">{{ currentModeInfo.label }}</span>
-          <Icon v-show="ui.mode === 'standard'" name="chevron-down" :size="10" class="mode-chevron" />
+          <span v-show="ui.mode === 'standard'" class="mode-label">{{
+            currentModeInfo.label
+          }}</span>
+          <Icon
+            v-show="ui.mode === 'standard'"
+            name="chevron-down"
+            :size="10"
+            class="mode-chevron"
+          />
         </button>
         <Transition name="dropdown">
           <div v-if="showModeSwitcher" class="mode-dropdown" @click.stop>
@@ -243,6 +248,8 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
   align-items: center;
   gap: 10px;
   padding: 4px 10px 18px;
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
 .collapsed .sidebar-brand {

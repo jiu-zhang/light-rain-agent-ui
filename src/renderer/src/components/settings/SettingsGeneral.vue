@@ -6,10 +6,14 @@ import {
   getAiParams,
   setAiParams,
   getChatPrefs,
-  setChatPrefs
+  setChatPrefs,
+  getCustomThemeVars,
+  setCustomThemeVar,
+  resetCustomTheme,
+  type ThemeMode
 } from '@renderer/utils'
-import type { ThemeMode } from '@renderer/utils'
 import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
+import ColorPicker from '@renderer/components/common/ColorPicker.vue'
 
 const themeMode = ref<ThemeMode>(getThemeMode())
 const aiParams = ref(getAiParams())
@@ -23,7 +27,13 @@ function applyTheme(mode: ThemeMode): void {
   setThemeMode(mode)
 }
 
-const themeOptions: { mode: ThemeMode; icon: IconName; label: string; desc: string; colors: string }[] = [
+const themeOptions: {
+  mode: ThemeMode
+  icon: IconName
+  label: string
+  desc: string
+  colors: string
+}[] = [
   {
     mode: 'light',
     icon: 'sun',
@@ -44,8 +54,39 @@ const themeOptions: { mode: ThemeMode; icon: IconName; label: string; desc: stri
     label: '跟随系统',
     desc: '自动切换',
     colors: 'linear-gradient(135deg, #06b6d4, #3b82f6, #8b5cf6)'
+  },
+  {
+    mode: 'custom',
+    icon: 'palette',
+    label: '自定义',
+    desc: '个性化配色',
+    colors: 'linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6)'
   }
 ]
+
+const customThemeVars = ref(getCustomThemeVars())
+
+const defaultCustomVars = {
+  primaryColor: '#60a5fa',
+  successColor: '#22c55e',
+  errorColor: '#ef4444',
+  warningColor: '#f59e0b'
+}
+
+/** 更新自定义主题变量 */
+function updateCustomVar(key: string, value: string): void {
+  setCustomThemeVar(key, value)
+  customThemeVars.value = getCustomThemeVars()
+}
+
+/** 重置自定义主题 */
+function handleResetCustomTheme(): void {
+  resetCustomTheme()
+  customThemeVars.value = {}
+  if (themeMode.value === 'custom') {
+    applyTheme('dark') // 重置后切换到深色主题
+  }
+}
 </script>
 
 <template>
@@ -72,6 +113,49 @@ const themeOptions: { mode: ThemeMode; icon: IconName; label: string; desc: stri
         <div v-if="themeMode === opt.mode" class="check-mark">
           <Icon name="check" :size="10" />
         </div>
+      </button>
+    </div>
+
+    <!-- 自定义主题配置面板 -->
+    <div v-if="themeMode === 'custom'" class="custom-theme-panel">
+      <div class="section-label">自定义主题配色</div>
+      <div class="color-control-list">
+        <div class="color-control-group">
+          <label class="color-control-label">主色调</label>
+          <ColorPicker
+            label="主色调"
+            :model-value="customThemeVars['--accent-primary'] || defaultCustomVars.primaryColor"
+            @update:model-value="(val) => updateCustomVar('--accent-primary', val)"
+          />
+        </div>
+        <div class="color-control-group">
+          <label class="color-control-label">成功</label>
+          <ColorPicker
+            label="成功色"
+            :model-value="customThemeVars['--accent-success'] || defaultCustomVars.successColor"
+            @update:model-value="(val) => updateCustomVar('--accent-success', val)"
+          />
+        </div>
+        <div class="color-control-group">
+          <label class="color-control-label">错误</label>
+          <ColorPicker
+            label="错误色"
+            :model-value="customThemeVars['--accent-error'] || defaultCustomVars.errorColor"
+            @update:model-value="(val) => updateCustomVar('--accent-error', val)"
+          />
+        </div>
+        <div class="color-control-group">
+          <label class="color-control-label">警告</label>
+          <ColorPicker
+            label="警告色"
+            :model-value="customThemeVars['--accent-warning'] || defaultCustomVars.warningColor"
+            @update:model-value="(val) => updateCustomVar('--accent-warning', val)"
+          />
+        </div>
+      </div>
+      <button class="reset-btn" @click="handleResetCustomTheme">
+        <Icon name="refresh" :size="14" />
+        重置自定义主题
       </button>
     </div>
   </div>
@@ -267,6 +351,55 @@ const themeOptions: { mode: ThemeMode; icon: IconName; label: string; desc: stri
   align-items: center;
   justify-content: center;
   color: white;
+}
+
+/* 自定义主题面板 */
+.custom-theme-panel {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  animation: slideDown 0.2s ease-out;
+}
+
+.color-control-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.color-control-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-control-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 .ai-params {
   display: flex;

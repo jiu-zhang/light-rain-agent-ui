@@ -1,4 +1,16 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, globalShortcut, protocol } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Tray,
+  Menu,
+  nativeImage,
+  globalShortcut,
+  protocol,
+  nativeTheme
+} from 'electron'
 import { join, extname } from 'path'
 import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
@@ -148,10 +160,7 @@ async function startBackend(win: BrowserWindow): Promise<void> {
     return
   }
 
-  backendProcess = spawn(javaPath, [
-    '-jar', jarPath,
-    `--server.port=${backendPort}`
-  ], {
+  backendProcess = spawn(javaPath, ['-jar', jarPath, `--server.port=${backendPort}`], {
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
@@ -218,6 +227,18 @@ function createWindow(): BrowserWindow {
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
+    backgroundColor: '#0f0f12',
+    ...(process.platform === 'win32'
+      ? {
+          // 隐藏原生标题栏：窗口控制按钮由 OS 作为 overlay 绘制，颜色随应用主题切换
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            color: '#0f0f12',
+            symbolColor: '#f4f4f5',
+            height: 40
+          }
+        }
+      : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -329,7 +350,10 @@ app.whenReady().then(() => {
   ipcMain.on('quit-app', () => {
     isQuitting = true
     stopBackend()
-    if (tray) { tray.destroy(); tray = null }
+    if (tray) {
+      tray.destroy()
+      tray = null
+    }
     app.quit()
   })
 
@@ -337,12 +361,28 @@ app.whenReady().then(() => {
   ipcMain.on('close-app', () => {
     isQuitting = true
     stopBackend()
-    if (tray) { tray.destroy(); tray = null }
+    if (tray) {
+      tray.destroy()
+      tray = null
+    }
     app.quit()
   })
 
   ipcMain.on('hide-to-tray', () => {
     mainWindow?.hide()
+  })
+
+  // 渲染进程主题变更：同步原生标题栏颜色与系统 UI 主题
+  ipcMain.on('theme-changed', (_event, payload: { mode?: string; theme?: string; bg?: string }) => {
+    if (!payload || typeof payload.theme !== 'string') return
+    const isDark = payload.theme === 'dark'
+    nativeTheme.themeSource = payload.mode === 'system' ? 'system' : isDark ? 'dark' : 'light'
+    if (process.platform === 'win32' && mainWindow?.setTitleBarOverlay) {
+      mainWindow.setTitleBarOverlay({
+        color: payload.bg || (isDark ? '#0f0f12' : '#ffffff'),
+        symbolColor: isDark ? '#f4f4f5' : '#0f172a'
+      })
+    }
   })
 
   mainWindow = createWindow()

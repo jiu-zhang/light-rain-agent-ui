@@ -8,9 +8,9 @@ defineProps<{
   /** 思考内容 */
   content: string
   /** 是否正在流式输出 */
-  streaming: boolean
+  streaming?: boolean
   /** 当前是否展开 */
-  open: boolean
+  open?: boolean
   /** 思考计时（秒），流式中实时递增、完成后定格 */
   elapsed: number
 }>()
@@ -19,18 +19,18 @@ const emit = defineEmits<{ toggle: [] }>()
 </script>
 
 <template>
-  <div class="reasoning-block" :class="{ 'is-streaming': streaming }">
+  <div class="reasoning-block" :class="{ 'is-streaming': !!streaming }">
     <button class="reasoning-header" type="button" @click="emit('toggle')">
       <span class="reasoning-ic"><Icon name="brain" :size="14" /></span>
       <span class="reasoning-label">
-        {{ streaming ? '思考中' : '深度思考' }}
-        <span v-if="streaming" class="reasoning-dot" />
+        {{ !!streaming ? '思考中' : '深度思考' }}
+        <span v-if="!!streaming" class="reasoning-dot" />
       </span>
       <span v-if="elapsed > 0" class="reasoning-duration">
-        {{ streaming ? `${elapsed}s` : `用时 ${elapsed} 秒` }}
+        {{ !!streaming ? `${elapsed}s` : `用时 ${elapsed} 秒` }}
       </span>
-      <span class="reasoning-toggle">{{ open ? '收起' : '展开' }}</span>
-      <Icon name="chevron-down" :size="13" class="reasoning-arrow" :class="{ open }" />
+      <span class="reasoning-toggle">{{ !!open ? '收起' : '展开' }}</span>
+      <Icon name="chevron-down" :size="13" class="reasoning-arrow" :class="{ open: !!open }" />
     </button>
     <div class="reasoning-body" :class="{ collapsed: !open }">
       <div class="reasoning-inner">
