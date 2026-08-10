@@ -20,7 +20,8 @@ const providerIconMap: Record<string, IconName> = {
   openai: 'brain',
   dashscope: 'cpu',
   ollama: 'server',
-  siliconflow: 'box'
+  siliconflow: 'box',
+  zhipuai: 'sparkles'
 }
 
 const hasModels = (): boolean => props.enabledProviders.some((p) => (p.models || []).length > 0)

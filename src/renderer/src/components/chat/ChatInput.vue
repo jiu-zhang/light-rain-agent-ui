@@ -13,7 +13,7 @@ const PLAN_MODE_KEY = 'agent-ui-plan-mode'
 const DEEP_THINK_KEY = 'agent-ui-deep-think'
 
 /** 支持深度思考的厂商 code（DeepSeek 不支持，不显示开关） */
-const DEEP_THINK_PROVIDERS = ['dashscope', 'openai', 'ollama']
+const DEEP_THINK_PROVIDERS = ['dashscope', 'openai', 'ollama', 'zhipuai']
 
 /** 待发送附件（uploading 为上传中状态标记） */
 interface PendingAttachment extends Attachment {
