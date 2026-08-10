@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
 import MarkdownContent from './MarkdownContent.vue'
 import type { ChatEvent } from '@renderer/types'
@@ -49,7 +50,7 @@ function toolContentInfo(evt: ChatEvent): { name: string; result: string } | nul
   }
 }
 
-const header = (): { title: string; icon: IconName; detail: string } => {
+const header = computed<{ title: string; icon: IconName; detail: string }>(() => {
   if (props.kind === 'call') {
     const info = toolCallInfo(props.evt)
     return {
@@ -64,7 +65,7 @@ const header = (): { title: string; icon: IconName; detail: string } => {
     icon: 'check',
     detail: info?.result ?? props.evt.content ?? ''
   }
-}
+})
 
 /**
  * 判断工具结果是否为结构化 markdown：
@@ -85,8 +86,8 @@ function isMarkdownLike(text: string): boolean {
 <template>
   <div class="tool-card" :class="kind === 'call' ? 'is-call' : 'is-result'">
     <div class="tool-card-header" @click="emit('toggle')">
-      <span class="tool-ic"><Icon :name="header().icon" :size="13" /></span>
-      <span class="tool-name">{{ header().title }}</span>
+      <span class="tool-ic"><Icon :name="header.icon" :size="13" /></span>
+      <span class="tool-name">{{ header.title }}</span>
       <span class="tool-status" :class="{ done: kind === 'result' }">
         <Icon v-if="kind === 'call'" name="loader" :size="11" class="tool-spin" />
         {{ kind === 'call' ? '调用中' : '已完成' }}
@@ -96,11 +97,11 @@ function isMarkdownLike(text: string): boolean {
     <div v-if="open" class="tool-detail">
       <!-- 结构化 markdown 结果走 MarkdownContent；纯文本/命令输出/JSON 保持 <pre> 原样 -->
       <MarkdownContent
-        v-if="kind === 'result' && isMarkdownLike(header().detail)"
-        :content="header().detail"
+        v-if="kind === 'result' && isMarkdownLike(header.detail)"
+        :content="header.detail"
         class="tool-detail-md"
       />
-      <pre v-else>{{ header().detail }}</pre>
+      <pre v-else>{{ header.detail }}</pre>
     </div>
   </div>
 </template>

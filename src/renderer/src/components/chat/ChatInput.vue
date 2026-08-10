@@ -4,16 +4,8 @@ import type { ProviderWithSimpleModels, Attachment } from '@renderer/types'
 import { chatApi } from '@renderer/api/chat'
 import { notifyError } from '@renderer/utils/feedback'
 import Icon from '@renderer/components/common/Icon.vue'
-import type { IconName } from '@renderer/components/common/Icon.vue'
-
-/** 厂商图标映射 */
-const providerIconMap: Record<string, IconName> = {
-  deepseek: 'robot',
-  openai: 'brain',
-  dashscope: 'cpu',
-  ollama: 'server',
-  siliconflow: 'box'
-}
+import ModePopover from '@renderer/components/chat/ModePopover.vue'
+import ModelPicker from '@renderer/components/chat/ModelPicker.vue'
 
 const MODEL_SEL_KEY = 'agent-ui-selected-model-id'
 const AGENT_MODE_KEY = 'agent-ui-agent-mode'
@@ -102,13 +94,6 @@ const currentProviderCode = computed(
 const supportsDeepThink = computed(() => DEEP_THINK_PROVIDERS.includes(currentProviderCode.value))
 
 const canSend = computed(() => inputText.value.trim().length > 0 || attachments.value.length > 0)
-
-/** 已开启的智能模式数量（用于命令栏角标） */
-const activeModeCount = computed(
-  () =>
-    [agentMode.value, planMode.value, deepThink.value && supportsDeepThink.value].filter(Boolean)
-      .length
-)
 
 function selectModel(id: number): void {
   selectedModelId.value = id
@@ -276,7 +261,10 @@ if (typeof document !== 'undefined') {
   document.addEventListener('click', onDocumentClick)
 }
 
-onBeforeUnmount(() => clearAttachments())
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
+  clearAttachments()
+})
 
 // 暴露给父组件调用
 defineExpose({ agentMode, planMode, deepThink, selectedModelId })
@@ -374,98 +362,27 @@ defineExpose({ agentMode, planMode, deepThink, selectedModelId })
           >
             <Icon name="paperclip" :size="15" />
           </button>
-          <div class="mode-wrap">
-            <button
-              class="command-btn mode-btn"
-              :class="{ lit: activeModeCount > 0, open: showModePopover }"
-              title="智能模式：智能体 / 计划 / 深度思考"
-              @click.stop="showModePopover = !showModePopover"
-            >
-              <Icon name="sparkles" :size="15" class="mode-icon" />
-              <span class="mode-label">模式</span>
-              <span v-if="activeModeCount" class="mode-badge">{{ activeModeCount }}</span>
-              <Icon name="chevron-down" :size="12" class="mode-arrow" />
-            </button>
-
-            <!-- 智能模式弹层 -->
-            <Transition name="pop">
-              <div v-if="showModePopover" class="mode-popover" @click.stop>
-                <div class="mode-popover-accent" />
-                <div class="mode-popover-title">
-                  <Icon name="sparkles" :size="13" />
-                  <span>智能模式</span>
-                </div>
-                <div class="mode-row" @click="toggleAgentMode">
-                  <div class="mode-row-icon agent"><Icon name="bot" :size="15" /></div>
-                  <div class="mode-row-text">
-                    <div class="mode-row-name">智能体模式</div>
-                    <div class="mode-row-desc">调用工具自动化完成任务</div>
-                  </div>
-                  <button class="mode-switch" :class="{ on: agentMode }" type="button">
-                    <span />
-                  </button>
-                </div>
-                <div class="mode-row" @click="togglePlanMode">
-                  <div class="mode-row-icon plan"><Icon name="git-branch" :size="15" /></div>
-                  <div class="mode-row-text">
-                    <div class="mode-row-name">计划模式</div>
-                    <div class="mode-row-desc">按计划拆分步骤逐步执行</div>
-                  </div>
-                  <button class="mode-switch" :class="{ on: planMode }" type="button">
-                    <span />
-                  </button>
-                </div>
-                <div v-if="supportsDeepThink" class="mode-row" @click="toggleDeepThink">
-                  <div class="mode-row-icon think"><Icon name="brain" :size="15" /></div>
-                  <div class="mode-row-text">
-                    <div class="mode-row-name">深度思考</div>
-                    <div class="mode-row-desc">模型先深入思考再回答</div>
-                  </div>
-                  <button class="mode-switch" :class="{ on: deepThink }" type="button">
-                    <span />
-                  </button>
-                </div>
-                <div class="mode-hint">
-                  <span class="hint-kbd">Enter</span> 发送
-                  <span class="hint-sep">·</span>
-                  <span class="hint-kbd">Shift+Enter</span> 换行
-                </div>
-              </div>
-            </Transition>
-          </div>
+          <ModePopover
+            :show="showModePopover"
+            :agent-mode="agentMode"
+            :plan-mode="planMode"
+            :deep-think="deepThink"
+            :supports-deep-think="supportsDeepThink"
+            @update:show="showModePopover = $event"
+            @toggle-agent="toggleAgentMode"
+            @toggle-plan="togglePlanMode"
+            @toggle-think="toggleDeepThink"
+          />
         </div>
         <div class="command-right">
-          <div
-            class="command-btn model-chip"
-            :class="{ active: showModelPicker }"
-            title="切换模型"
-            @click.stop="showModelPicker = !showModelPicker"
-          >
-            <span class="model-dot" />
-            <span class="model-name">{{ currentModelLabel }}</span>
-            <Icon name="chevron-down" :size="13" class="model-arrow" />
-            <div v-if="showModelPicker" class="toolbar-dropdown" @click.stop>
-              <div v-for="p in enabledProviders" :key="p.id" class="dropdown-group">
-                <div class="dropdown-group-label">{{ p.name }}</div>
-                <div
-                  v-for="m in p.models"
-                  :key="m.id"
-                  class="dropdown-option"
-                  :class="{ active: selectedModelId === m.id }"
-                  @click="selectModel(m.id)"
-                >
-                  <Icon :name="providerIconMap[p.code] || 'cpu'" :size="11" class="model-icon" />
-                  <span class="model-text">
-                    <span v-if="m.isDefault" class="dropdown-default"
-                      ><Icon name="star" :size="10"
-                    /></span>
-                    {{ m.name }}
-                  </span>
-                </div>
-              </div>
-              <div v-if="enabledModels.length === 0" class="dropdown-empty">暂无可用模型</div>
-            </div>
-          </div>
+          <ModelPicker
+            :show="showModelPicker"
+            :enabled-providers="enabledProviders"
+            :selected-model-id="selectedModelId"
+            :current-model-label="currentModelLabel"
+            @update:show="showModelPicker = $event"
+            @select="selectModel"
+          />
         </div>
       </div>
     </div>
@@ -811,327 +728,5 @@ defineExpose({ agentMode, planMode, deepThink, selectedModelId })
 }
 .attach-btn:hover {
   color: var(--accent-primary);
-}
-.mode-btn {
-  gap: 5px;
-}
-.mode-wrap {
-  position: relative;
-  display: flex;
-}
-.mode-btn .mode-icon {
-  color: var(--text-tertiary);
-  transition: all 0.2s;
-}
-.mode-btn:hover .mode-icon {
-  color: var(--accent-primary);
-}
-.mode-btn.lit {
-  color: var(--accent-primary);
-  border-color: var(--border-accent);
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-  box-shadow: 0 0 16px rgba(96, 165, 250, 0.18);
-}
-.mode-btn.lit .mode-icon {
-  color: var(--accent-primary);
-}
-.mode-btn.open {
-  color: var(--accent-primary);
-  border-color: var(--border-accent);
-  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
-}
-.mode-badge {
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #60a5fa, #8b5cf6);
-  color: white;
-  font-size: 10px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-.mode-arrow {
-  color: var(--text-quaternary);
-  transition: transform 0.2s;
-}
-.mode-btn.open .mode-arrow {
-  transform: rotate(180deg);
-}
-
-/* 智能模式弹层 */
-.mode-popover {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  width: 280px;
-  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
-  backdrop-filter: blur(28px) saturate(1.4);
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  padding: 10px;
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(96, 165, 250, 0.08) inset;
-  z-index: 100;
-  overflow: hidden;
-}
-.mode-popover-accent {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #60a5fa, #8b5cf6, #34d399);
-  opacity: 0.9;
-}
-.mode-popover-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-.mode-popover-title .icon {
-  color: var(--accent-primary);
-}
-.mode-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.mode-row:hover {
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-}
-.mode-row-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.mode-row-icon.agent {
-  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
-  color: var(--accent-success);
-}
-.mode-row-icon.plan {
-  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
-  color: var(--accent-primary);
-}
-.mode-row-icon.think {
-  background: color-mix(in srgb, #a78bfa 18%, transparent);
-  color: #a78bfa;
-}
-.mode-row-text {
-  flex: 1;
-  min-width: 0;
-}
-.mode-row-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.mode-row-desc {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-top: 1px;
-}
-.mode-switch {
-  position: relative;
-  width: 34px;
-  height: 19px;
-  border: none;
-  border-radius: 999px;
-  background: var(--bg-quaternary);
-  cursor: pointer;
-  transition: background 0.25s;
-  flex-shrink: 0;
-  padding: 0;
-}
-.mode-switch span {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--text-secondary);
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.mode-switch.on {
-  background: linear-gradient(135deg, #60a5fa, #8b5cf6);
-  box-shadow: 0 0 12px rgba(96, 165, 250, 0.4);
-}
-.mode-switch.on span {
-  transform: translateX(15px);
-  background: white;
-  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.5);
-}
-.mode-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 6px 2px;
-  font-size: 11px;
-  color: var(--text-quaternary);
-}
-.mode-hint .hint-sep {
-  margin: 0 2px;
-}
-.hint-kbd {
-  padding: 1px 5px;
-  background: var(--bg-glass);
-  border-radius: 4px;
-  font-family: var(--font-code);
-  font-size: 10px;
-  color: var(--text-tertiary);
-}
-
-/* 弹层过渡动画 */
-.pop-enter-active,
-.pop-leave-active {
-  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.pop-enter-from,
-.pop-leave-to {
-  opacity: 0;
-  transform: translateY(6px) scale(0.96);
-}
-
-/* 模型选择 */
-.model-chip {
-  gap: 6px;
-  max-width: 200px;
-}
-.model-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: linear-gradient(135deg, #60a5fa, #34d399);
-  box-shadow: 0 0 8px rgba(96, 165, 250, 0.7);
-}
-.model-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 150px;
-}
-.model-arrow {
-  color: var(--text-quaternary);
-  flex-shrink: 0;
-  transition: transform 0.2s;
-}
-.model-chip.active .model-arrow {
-  transform: rotate(180deg);
-}
-.model-chip.active {
-  border-color: var(--border-accent);
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-}
-.toolbar-dropdown {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  min-width: 200px;
-  max-height: 300px;
-  overflow-y: auto;
-  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
-  backdrop-filter: blur(24px) saturate(1.4);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(96, 165, 250, 0.06) inset;
-  z-index: 100;
-  animation: dropdownIn 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-@keyframes dropdownIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-.dropdown-group {
-  margin-bottom: 4px;
-}
-.dropdown-group:last-child {
-  margin-bottom: 0;
-}
-.dropdown-group-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-quaternary);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 5px 10px 3px;
-}
-.dropdown-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.dropdown-option:hover {
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
-  color: var(--text-primary);
-}
-.dropdown-option.active {
-  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-  color: var(--accent-primary);
-  font-weight: 600;
-}
-.dropdown-default {
-  color: #fbbf24;
-  display: flex;
-  margin-right: 2px;
-}
-
-.model-icon {
-  color: var(--text-tertiary);
-  margin-right: 6px;
-  opacity: 0.8;
-}
-
-.dropdown-option:hover .model-icon,
-.dropdown-option.active .model-icon {
-  opacity: 1;
-  color: var(--accent-primary);
-}
-
-.model-text {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.dropdown-empty {
-  padding: 14px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-quaternary);
 }
 </style>

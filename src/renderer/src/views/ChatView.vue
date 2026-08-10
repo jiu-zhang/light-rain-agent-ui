@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@renderer/stores'
+import { isBackendConfigured } from '@renderer/api'
 import { providerApi } from '@renderer/api/provider'
 import type { Attachment, ChatTurn, ProviderWithSimpleModels } from '@renderer/types'
 import TopBar from '@renderer/components/layout/TopBar.vue'
@@ -9,7 +10,7 @@ import ChatInput from '@renderer/components/chat/ChatInput.vue'
 import ExecutionPanel from '@renderer/components/chat/ExecutionPanel.vue'
 import InputDialog from '@renderer/components/chat/InputDialog.vue'
 import VirtualMessageList from '@renderer/components/chat/VirtualMessageList.vue'
-import Icon from '@renderer/components/common/Icon.vue'
+import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
 import type { SendOptions } from '@renderer/stores/chat'
 
 const route = useRoute()
@@ -133,18 +134,6 @@ watch(
   }
 )
 
-// 流式输出时若用户停留在底部附近，持续跟随滚动
-watch(
-  () => chatStore.messages[chatStore.messages.length - 1]?.content,
-  () => {
-    const c = messagesContainer.value
-    if (!c) return
-    if (c.scrollTop + c.clientHeight >= c.scrollHeight - 80) {
-      scrollToBottom()
-    }
-  }
-)
-
 async function loadEnabledModels(): Promise<void> {
   try {
     const res = await providerApi.listEnabledWithModels()
@@ -182,7 +171,7 @@ function sendText(text: string, attachments?: Attachment[]): void {
 }
 
 /** 空态快捷提问 */
-const quickPrompts = [
+const quickPrompts: { icon: IconName; label: string; prompt: string }[] = [
   {
     icon: 'folder',
     label: '文件操作',
@@ -322,10 +311,18 @@ function onTrackMouseDown(e: MouseEvent): void {
 }
 
 onBeforeUnmount(() => {
+  disposeBackendReady?.()
   endDrag()
 })
 
-onMounted(async () => {
+/** 后端就绪事件解绑（组件卸载时清理） */
+let disposeBackendReady: (() => void) | null = null
+
+/**
+ * 初始化对话页数据：模型列表 + 会话恢复。
+ * 需在业务请求可用（后端已就绪）后调用。
+ */
+async function bootstrap(): Promise<void> {
   const tasks: Promise<unknown>[] = [loadEnabledModels()]
   if (chatStore.sessions.length === 0) {
     tasks.push(chatStore.loadSessions())
@@ -344,6 +341,21 @@ onMounted(async () => {
   } else {
     onMessagesScroll()
   }
+}
+
+onMounted(() => {
+  // 后端已就绪（开发环境或主进程已下发端口）直接初始化；
+  // 生产环境启动初期后端 JAR 尚未拉起，等待 backend-ready 事件后再发请求，
+  // 避免在 StartupLoading 期间发起必然失败的请求。
+  if (isBackendConfigured()) {
+    void bootstrap()
+    return
+  }
+  disposeBackendReady = window.api.onBackendReady(() => {
+    disposeBackendReady?.()
+    disposeBackendReady = null
+    void bootstrap()
+  })
 })
 </script>
 
@@ -375,7 +387,7 @@ onMounted(async () => {
             :title="q.prompt"
             @click="sendText(q.prompt)"
           >
-            <Icon :name="q.icon as any" :size="15" class="hint-icon" />
+            <Icon :name="q.icon" :size="15" class="hint-icon" />
             <span class="hint-text">{{ q.label }}</span>
           </button>
         </div>

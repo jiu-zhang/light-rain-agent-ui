@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import Icon from '@renderer/components/common/Icon.vue'
+import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
 import type { ToolRun, PlanStepDisplay } from '@renderer/stores/chat'
 
 const props = defineProps<{
@@ -28,7 +28,7 @@ function toggleTool(id: string): void {
 }
 
 /** 工具调用 icon */
-function toolIcon(name: string): string {
+function toolIcon(name: string): IconName {
   if (
     name.startsWith('read') ||
     name.startsWith('list') ||
@@ -145,7 +145,7 @@ watch(
         <div class="tool-list">
           <div v-for="t in toolRuns" :key="t.id" class="tool-item" :class="t.status.toLowerCase()">
             <div class="tool-item-head">
-              <Icon :name="toolIcon(t.toolName) as any" :size="14" class="tool-item-icon" />
+              <Icon :name="toolIcon(t.toolName)" :size="14" class="tool-item-icon" />
               <span class="tool-item-name">{{ t.toolName }}</span>
               <span class="tool-item-status">{{ statusText(t.status) }}</span>
               <button v-if="t.arguments" class="tool-expand" @click="toggleTool(t.id)">

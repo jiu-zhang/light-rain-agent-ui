@@ -181,7 +181,12 @@ async function startBackend(win: BrowserWindow): Promise<void> {
 
   backendProcess.on('exit', (code) => {
     console.log(`[Backend] exited with code ${code}`)
+    const wasStopped = backendProcess === null
     backendProcess = null
+    // 主动停止（正常退出）不通知；异常退出/崩溃时告知渲染进程，触发重连提示
+    if (!wasStopped && !is.dev && !win.isDestroyed()) {
+      win.webContents.send('backend-down', { code })
+    }
   })
 
   // 等待后端就绪（轮询健康检查接口）
@@ -347,8 +352,8 @@ app.whenReady().then(() => {
 
   ipcMain.on('ping', () => console.log('pong'))
 
-  // 来自 IPC：用户点击了"退出"
-  ipcMain.on('quit-app', () => {
+  /** 退出应用（清理托盘与后端后退出） */
+  function quitApp(): void {
     isQuitting = true
     stopBackend()
     if (tray) {
@@ -356,18 +361,12 @@ app.whenReady().then(() => {
       tray = null
     }
     app.quit()
-  })
+  }
 
-  // 关闭确认弹窗的选择
-  ipcMain.on('close-app', () => {
-    isQuitting = true
-    stopBackend()
-    if (tray) {
-      tray.destroy()
-      tray = null
-    }
-    app.quit()
-  })
+  // 来自 IPC：用户点击了"退出"（托盘菜单 / 关闭确认弹窗"退出"）
+  ipcMain.on('quit-app', quitApp)
+  // 关闭确认弹窗选择"退出应用"
+  ipcMain.on('close-app', quitApp)
 
   ipcMain.on('hide-to-tray', () => {
     mainWindow?.hide()
@@ -445,7 +444,10 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      mainWindow = createWindow()
+      if (appReady) startBackend(mainWindow)
+    }
   })
 })
 

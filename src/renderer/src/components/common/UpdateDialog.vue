@@ -12,7 +12,11 @@ let disposeUpdateAvailable: (() => void) | null = null
 let disposeUpdateProgress: (() => void) | null = null
 let disposeUpdateDownloaded: (() => void) | null = null
 
-function onUpdateAvailable(info: { currentVersion: string; version: string; releaseDate: string }): void {
+function onUpdateAvailable(info: {
+  currentVersion: string
+  version: string
+  releaseDate: string
+}): void {
   currentVersion.value = info.currentVersion
   newVersion.value = info.version
   state.value = 'available'
@@ -69,7 +73,17 @@ onUnmounted(() => {
           <!-- Header -->
           <div class="dialog-header">
             <div class="icon-ring">
-              <svg class="update-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                class="update-icon"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <!-- download arrow -->
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
@@ -96,7 +110,16 @@ onUnmounted(() => {
                 <span class="info-value">v{{ newVersion }}</span>
               </div>
               <button class="btn-primary" @click="startDownload">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
@@ -121,7 +144,16 @@ onUnmounted(() => {
             <!-- State: Downloaded -->
             <template v-if="state === 'downloaded'">
               <div class="check-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="48"
+                  height="48"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
@@ -129,7 +161,16 @@ onUnmounted(() => {
               <p class="desc">更新已下载完成！</p>
               <p class="hint">重启应用即可完成更新</p>
               <button class="btn-primary" @click="restartNow">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <polyline points="23 4 23 10 17 10" />
                   <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                 </svg>
@@ -206,8 +247,13 @@ onUnmounted(() => {
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
 }
 
 .header-text {
@@ -297,8 +343,12 @@ onUnmounted(() => {
 }
 
 @keyframes shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .progress-text {

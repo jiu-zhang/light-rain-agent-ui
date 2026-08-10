@@ -10,8 +10,6 @@ import type {
   SSECallbacks
 } from '@renderer/types'
 
-const abortControllers = new Map<string, AbortController>()
-
 export const chatApi = {
   /**
    * 上传聊天附件（图片等文件），返回附件描述（fileId 供对话引用）
@@ -40,7 +38,6 @@ export const chatApi = {
 
   chat(request: ChatRequest, callbacks: SSECallbacks): AbortController {
     const controller = new AbortController()
-    abortControllers.set(request.sessionId, controller)
     // DONE/ERROR 是否已送达：用于判断流异常关闭时是否需要兜底清理 loading 状态
     let settled = false
     let aborted = false
@@ -143,8 +140,6 @@ export const chatApi = {
           settled = true
           callbacks.onError?.(String(err))
         } finally {
-          // 流结束后清理 abort controller，避免 Map 无限增长
-          abortControllers.delete(request.sessionId)
           // 服务端在未发 DONE/ERROR 的情况下关闭了流（如客户端断开重连等）：
           // 兜底触发 onDone，避免 loading 状态卡死整个 UI
           if (!aborted && !settled) callbacks.onDone?.()

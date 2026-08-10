@@ -1,5 +1,10 @@
 import api from './index'
-import type { ApiResponse, AiProvider, AiProviderWithModels, ProviderWithSimpleModels } from '@renderer/types'
+import type {
+  ApiResponse,
+  AiProvider,
+  AiProviderWithModels,
+  ProviderWithSimpleModels
+} from '@renderer/types'
 
 export const providerApi = {
   listAll(): Promise<ApiResponse<AiProvider[]>> {

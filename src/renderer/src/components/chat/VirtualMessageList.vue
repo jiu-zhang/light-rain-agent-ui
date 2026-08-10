@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import type { ChatTurn } from '@renderer/types'
 import ChatMessage from './ChatMessage.vue'
 
@@ -21,18 +21,21 @@ const containerRef = ref<HTMLElement | null>(null)
  */
 let pinBottom = false
 
+/** 底部锚定阈值：滚动位置距离底部小于该值视为"贴底" */
+const FOLLOW_THRESHOLD = 80
+
 function handleScroll(e: Event): void {
   const target = e.target as HTMLElement
-  // 用户向上滚动（查看更早内容）即解除贴底锚定
-  if (target.scrollTop + target.clientHeight < target.scrollHeight - 80) {
-    pinBottom = false
-  }
+  // 双向判定：离开底部 → 停止跟随；回到底部附近 → 恢复跟随（QQ 式交互）
+  pinBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - FOLLOW_THRESHOLD
   emit('scroll', e)
 }
 
-// 新消息追加 / 流式输出增长时，若仍锚定底部则跟随滚动到底部
+// 消息列表引用变化（流式 content 更新 / 新回合追加 / 历史加载）时，
+// 若仍锚定在底部则跟随滚动到底部；turns 由父组件按消息内容重建，
+// AI 回合的 content 在 events 内，故监听整个数组引用而非单个字段。
 watch(
-  () => props.messages[props.messages.length - 1]?.content,
+  () => props.messages,
   () => {
     const el = containerRef.value
     if (!el || !pinBottom) return
@@ -41,10 +44,6 @@ watch(
     })
   }
 )
-
-onBeforeUnmount(() => {
-  // 无自定义监听器/观察器需要清理
-})
 
 // ─── 暴露给父组件（兼容原生滚动容器调用方式） ─────────
 function scrollTo(options: {

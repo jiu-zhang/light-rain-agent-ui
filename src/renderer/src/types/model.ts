@@ -34,7 +34,6 @@ export interface AiModelEnabled {
   name: string
 }
 
-
 /** 模型列表（管理用） */
 export interface AiModelList {
   id: number

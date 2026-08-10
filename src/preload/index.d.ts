@@ -10,6 +10,7 @@ interface UpdateApi {
   onBackendReady: (
     callback: (info: { port: number; external?: boolean; dev?: boolean }) => void
   ) => () => void
+  onBackendDown: (callback: (info: { code?: number | null }) => void) => () => void
   onConfirmClose: (callback: () => void) => () => void
   closeApp: () => void
   hideToTray: () => void

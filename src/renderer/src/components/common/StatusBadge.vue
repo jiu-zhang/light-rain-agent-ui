@@ -26,7 +26,7 @@ const config = computed(() => {
       label: props.label || statusConfig[props.type].label
     }
   }
-  
+
   return {
     color: '#6b7280',
     icon: props.icon || 'info',
@@ -34,15 +34,14 @@ const config = computed(() => {
   }
 })
 
-const typeClasses = 'status-badge' + 
-  (props.size === 'sm' ? ' sm' : '') + 
-  (props.type ? ` ${props.type}` : '')
+const typeClasses =
+  'status-badge' + (props.size === 'sm' ? ' sm' : '') + (props.type ? ` ${props.type}` : '')
 </script>
 
 <template>
   <span :class="typeClasses">
-    <Icon 
-      :name="config.icon as IconName" 
+    <Icon
+      :name="config.icon as IconName"
       :size="props.size === 'sm' ? 10 : 12"
       :class="config.icon === 'loader' ? 'spin' : ''"
     />
@@ -60,7 +59,7 @@ const typeClasses = 'status-badge' +
   font-size: 11px;
   font-weight: 600;
   color: white;
-  background: v-bind("config.color");
+  background: v-bind('config.color');
   transition: all 0.2s ease;
 }
 

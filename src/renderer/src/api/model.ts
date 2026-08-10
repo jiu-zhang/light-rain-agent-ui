@@ -1,10 +1,5 @@
 import api from './index'
-import type {
-  ApiResponse,
-  AiModel,
-  AiModelEnabled,
-  AiModelList
-} from '@renderer/types'
+import type { ApiResponse, AiModel, AiModelEnabled, AiModelList } from '@renderer/types'
 
 export const modelApi = {
   listEnabled(): Promise<ApiResponse<AiModelEnabled[]>> {

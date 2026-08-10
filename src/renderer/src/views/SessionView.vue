@@ -212,7 +212,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="view-container session-view" ref="listRef" @scroll="onListScroll">
+  <div ref="listRef" class="view-container session-view" @scroll="onListScroll">
     <div class="view-header">
       <div class="header-content">
         <h1 class="view-title">会话历史</h1>

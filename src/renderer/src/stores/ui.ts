@@ -9,12 +9,13 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { IconName } from '@renderer/components/common/Icon.vue'
 
 export type AppMode = 'standard' | 'minimal' | 'immersive' | 'focus'
 
 const MODE_KEY = 'agent-ui-mode'
 
-export const MODE_OPTIONS: { value: AppMode; label: string; desc: string; icon: string }[] = [
+export const MODE_OPTIONS: { value: AppMode; label: string; desc: string; icon: IconName }[] = [
   { value: 'standard', label: '标准', desc: '完整侧边栏', icon: 'monitor' },
   { value: 'minimal', label: '极简', desc: '折叠侧边栏', icon: 'focus' },
   { value: 'immersive', label: '沉浸', desc: '鼠标悬停呼出', icon: 'target' },

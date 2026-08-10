@@ -40,6 +40,13 @@ const api = {
     ipcRenderer.on('backend-ready', listener)
     return () => ipcRenderer.removeListener('backend-ready', listener)
   },
+  // 后端进程异常退出（崩溃）
+  onBackendDown: (callback: (info: { code?: number | null }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, info: { code?: number | null }): void =>
+      callback(info)
+    ipcRenderer.on('backend-down', listener)
+    return () => ipcRenderer.removeListener('backend-down', listener)
+  },
   // 关闭确认弹窗
   onConfirmClose: (callback: () => void): (() => void) => {
     const listener = (): void => callback()

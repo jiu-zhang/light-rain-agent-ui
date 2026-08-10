@@ -4,3 +4,8 @@ pnpm-lock.yaml
 LICENSE.md
 tsconfig.json
 tsconfig.*.json
+# 第三方/资源文件与文档：无需 prettier 格式化
+resources
+docs
+README.md
+package-lock.json

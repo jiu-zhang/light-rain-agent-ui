@@ -3,13 +3,13 @@ import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUiStore, MODE_OPTIONS } from '@renderer/stores'
 import type { AppMode } from '@renderer/stores'
-import Icon from '@renderer/components/common/Icon.vue'
+import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
 
 const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
 
-const navItems = [
+const navItems: { path: string; icon: IconName; label: string }[] = [
   { path: '/', icon: 'chat', label: '对话' },
   { path: '/sessions', icon: 'history', label: '历史' },
   { path: '/models', icon: 'robot', label: '模型' },
@@ -19,7 +19,9 @@ const navItems = [
   { path: '/plans', icon: 'git-branch', label: '计划模板' }
 ]
 
-const bottomItems = computed(() => [{ path: '/settings', icon: 'settings', label: '设置' }])
+const bottomItems = computed(() => [
+  { path: '/settings', icon: 'settings' as IconName, label: '设置' }
+])
 
 /** 沉浸/专注模式：左缘热区 + 临时抽屉 */
 const isHovering = ref(false)
@@ -86,7 +88,7 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
         :class="{ active: isActive(item.path) }"
         @click="handleNavClick(item.path)"
       >
-        <Icon :name="item.icon as any" :size="18" class="item-icon" />
+        <Icon :name="item.icon" :size="18" class="item-icon" />
         <span v-show="ui.mode === 'standard'" class="item-label">{{ item.label }}</span>
         <span v-show="ui.mode === 'minimal'" class="item-tooltip">{{ item.label }}</span>
       </button>
@@ -100,7 +102,7 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
           :title="currentModeInfo.label + '模式'"
           @click="toggleModeSwitcher"
         >
-          <Icon :name="currentModeInfo.icon as any" :size="16" />
+          <Icon :name="currentModeInfo.icon" :size="16" />
           <span v-show="ui.mode === 'standard'" class="mode-label">{{
             currentModeInfo.label
           }}</span>
@@ -120,7 +122,7 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
               :class="{ active: ui.mode === opt.value }"
               @click="selectMode(opt.value)"
             >
-              <Icon :name="opt.icon as any" :size="14" />
+              <Icon :name="opt.icon" :size="14" />
               <div class="mode-option-info">
                 <span class="mode-option-label">{{ opt.label }}</span>
                 <span class="mode-option-desc">{{ opt.desc }}</span>
@@ -138,7 +140,7 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
         :class="{ active: isActive(item.path) }"
         @click="handleNavClick(item.path)"
       >
-        <Icon :name="item.icon as any" :size="18" class="item-icon" />
+        <Icon :name="item.icon" :size="18" class="item-icon" />
         <span v-show="ui.mode === 'standard'" class="item-label">{{ item.label }}</span>
         <span v-show="ui.mode === 'minimal'" class="item-tooltip">{{ item.label }}</span>
       </button>
@@ -174,14 +176,14 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
               :class="{ active: isActive(item.path) }"
               @click="handleNavClick(item.path)"
             >
-              <Icon :name="item.icon as any" :size="18" class="item-icon" />
+              <Icon :name="item.icon" :size="18" class="item-icon" />
               <span class="item-label">{{ item.label }}</span>
             </button>
           </div>
           <div class="sidebar-bottom">
             <div class="mode-switcher">
               <button class="mode-current" @click="toggleModeSwitcher">
-                <Icon :name="currentModeInfo.icon as any" :size="16" />
+                <Icon :name="currentModeInfo.icon" :size="16" />
                 <span class="mode-label">{{ currentModeInfo.label }}</span>
                 <Icon name="chevron-down" :size="10" class="mode-chevron" />
               </button>
@@ -194,7 +196,7 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
                     :class="{ active: ui.mode === opt.value }"
                     @click="selectMode(opt.value)"
                   >
-                    <Icon :name="opt.icon as any" :size="14" />
+                    <Icon :name="opt.icon" :size="14" />
                     <div class="mode-option-info">
                       <span class="mode-option-label">{{ opt.label }}</span>
                       <span class="mode-option-desc">{{ opt.desc }}</span>
@@ -211,7 +213,7 @@ const useDrawerSidebar = computed(() => ui.mode === 'immersive' || ui.mode === '
               :class="{ active: isActive(item.path) }"
               @click="handleNavClick(item.path)"
             >
-              <Icon :name="item.icon as any" :size="18" class="item-icon" />
+              <Icon :name="item.icon" :size="18" class="item-icon" />
               <span class="item-label">{{ item.label }}</span>
             </button>
           </div>

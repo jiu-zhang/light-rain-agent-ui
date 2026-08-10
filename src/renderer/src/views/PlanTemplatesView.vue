@@ -36,7 +36,7 @@ async function load(): Promise<void> {
   errorMsg.value = ''
   try {
     const res = await planApi.listTemplates()
-    templates.value = res.code === 200 ? res.data ?? [] : []
+    templates.value = res.code === 200 ? (res.data ?? []) : []
     if (res.code !== 200) errorMsg.value = res.message || '加载模板失败'
   } catch {
     templates.value = []
@@ -150,7 +150,7 @@ async function openVersions(t: PlanTemplate): Promise<void> {
   versions.value = []
   try {
     const res = await planApi.listTemplateVersions(t.id)
-    versions.value = res.code === 200 ? res.data ?? [] : []
+    versions.value = res.code === 200 ? (res.data ?? []) : []
   } catch {
     versions.value = []
   } finally {
@@ -216,7 +216,9 @@ onMounted(load)
         <Icon name="loader" :size="20" class="spin" />
         加载中...
       </div>
-      <div v-else-if="templates.length === 0" class="empty-hint">暂无模板，点击「新建模板」创建</div>
+      <div v-else-if="templates.length === 0" class="empty-hint">
+        暂无模板，点击「新建模板」创建
+      </div>
       <div v-else class="template-grid">
         <div v-for="t in templates" :key="t.id" class="template-card">
           <div class="template-head">
@@ -237,7 +239,9 @@ onMounted(load)
           <p class="template-goal" :title="t.goal">{{ t.goal }}</p>
           <div class="template-steps">{{ formatSteps(t.stepsJson) }}</div>
           <div class="template-meta">
-            <span>更新于 {{ t.updateTime ? t.updateTime.replace('T', ' ').slice(0, 16) : '-' }}</span>
+            <span
+              >更新于 {{ t.updateTime ? t.updateTime.replace('T', ' ').slice(0, 16) : '-' }}</span
+            >
           </div>
         </div>
       </div>
@@ -259,15 +263,29 @@ onMounted(load)
           </label>
           <label class="field">
             <span class="field-label">描述</span>
-            <input v-model="formDescription" class="field-input" placeholder="模板用途说明（可选）" />
+            <input
+              v-model="formDescription"
+              class="field-input"
+              placeholder="模板用途说明（可选）"
+            />
           </label>
           <label class="field">
             <span class="field-label">目标（支持占位符，如 {date}、{name}）</span>
-            <textarea v-model="formGoal" class="field-input field-area" rows="2" placeholder="例如：帮我生成 {date} 的周报，总结本周工作并列出下周计划" />
+            <textarea
+              v-model="formGoal"
+              class="field-input field-area"
+              rows="2"
+              placeholder="例如：帮我生成 {date} 的周报，总结本周工作并列出下周计划"
+            />
           </label>
           <label class="field">
             <span class="field-label">步骤（JSON 数组，每项含 name/description）</span>
-            <textarea v-model="formSteps" class="field-input field-code" rows="8" spellcheck="false" />
+            <textarea
+              v-model="formSteps"
+              class="field-input field-code"
+              rows="8"
+              spellcheck="false"
+            />
           </label>
           <div v-if="formError" class="form-error">{{ formError }}</div>
         </div>
@@ -300,7 +318,8 @@ onMounted(load)
                 <div class="version-info">
                   <div class="version-name">{{ v.name }}</div>
                   <div class="version-meta">
-                    {{ formatTime(v.createTime) }} · {{ (v.goal || '').slice(0, 40) }}{{ (v.goal || '').length > 40 ? '…' : '' }}
+                    {{ formatTime(v.createTime) }} · {{ (v.goal || '').slice(0, 40)
+                    }}{{ (v.goal || '').length > 40 ? '…' : '' }}
                   </div>
                 </div>
               </div>
@@ -317,7 +336,7 @@ onMounted(load)
         </div>
       </div>
     </div>
-    
+
     <!-- 删除模板确认对话框 -->
     <ConfirmDialog
       v-if="showDeleteConfirm"
@@ -333,7 +352,11 @@ onMounted(load)
     <ConfirmDialog
       v-if="showRollbackConfirm"
       title="回滚模板"
-      :message="rollbackTarget && versionsTarget ? `确认将模板「${versionsTarget.name}」回滚到 v${rollbackTarget.version}？当前内容将被保存为新版本。` : ''"
+      :message="
+        rollbackTarget && versionsTarget
+          ? `确认将模板「${versionsTarget.name}」回滚到 v${rollbackTarget.version}？当前内容将被保存为新版本。`
+          : ''
+      "
       confirm-text="回滚"
       cancel-text="取消"
       @confirm="confirmRollback"

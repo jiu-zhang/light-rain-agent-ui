@@ -104,7 +104,7 @@ function handleResetCustomTheme(): void {
         @click="applyTheme(opt.mode)"
       >
         <div class="theme-preview" :style="{ background: opt.colors }">
-          <Icon :name="opt.icon as any" :size="20" class="preview-icon" />
+          <Icon :name="opt.icon" :size="20" class="preview-icon" />
         </div>
         <div class="theme-info">
           <span class="theme-name">{{ opt.label }}</span>

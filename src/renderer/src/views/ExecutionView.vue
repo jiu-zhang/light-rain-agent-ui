@@ -32,7 +32,7 @@ async function loadSnapshots(): Promise<void> {
   if (!selected.value?.sessionId) return
   try {
     const res = await planApi.listSnapshots(selected.value.sessionId)
-    snapshots.value = res.code === 200 ? res.data ?? [] : []
+    snapshots.value = res.code === 200 ? (res.data ?? []) : []
   } catch {
     snapshots.value = []
   }
@@ -48,7 +48,13 @@ async function deleteSnapshot(snapshotId: string | number): Promise<void> {
 }
 
 function snapshotStateText(state: string): string {
-  return state === 'SAVED' ? '已保存' : state === 'SIMULATED' ? '已模拟' : state === 'CONTINUED' ? '已继续' : state
+  return state === 'SAVED'
+    ? '已保存'
+    : state === 'SIMULATED'
+      ? '已模拟'
+      : state === 'CONTINUED'
+        ? '已继续'
+        : state
 }
 
 /** 展开/收起某个 think-act */
@@ -75,7 +81,13 @@ function stateClass(state: string): string {
 }
 
 function stateText(state: string): string {
-  return state === 'COMPLETED' ? '成功' : state === 'FAILED' ? '失败' : state === 'CANCELLED' ? '已取消' : '执行中'
+  return state === 'COMPLETED'
+    ? '成功'
+    : state === 'FAILED'
+      ? '失败'
+      : state === 'CANCELLED'
+        ? '已取消'
+        : '执行中'
 }
 
 function toolStateText(status: string): string {
@@ -97,7 +109,7 @@ async function loadList(): Promise<void> {
   loading.value = true
   try {
     const res = await planApi.pageExecutions({ page: 1, size: 50 })
-    records.value = res.code === 200 ? res.data ?? [] : []
+    records.value = res.code === 200 ? (res.data ?? []) : []
   } catch {
     records.value = []
   } finally {
@@ -143,7 +155,9 @@ onMounted(loadList)
         <Icon name="loader" :size="20" class="spin" />
         加载中...
       </div>
-      <div v-else-if="records.length === 0" class="empty-hint">暂无执行记录，先在对话中开启 Agent 或计划模式</div>
+      <div v-else-if="records.length === 0" class="empty-hint">
+        暂无执行记录，先在对话中开启 Agent 或计划模式
+      </div>
       <div v-else class="exec-layout">
         <div class="record-list">
           <button
@@ -154,7 +168,9 @@ onMounted(loadList)
             @click="openDetail(r)"
           >
             <div class="record-top">
-              <span class="record-state" :class="stateClass(r.state)">{{ stateText(r.state) }}</span>
+              <span class="record-state" :class="stateClass(r.state)">{{
+                stateText(r.state)
+              }}</span>
               <span class="record-time">{{ formatTime(r.createTime) }}</span>
             </div>
             <div class="record-question">{{ shortText(r.question, 60) || '（无提问内容）' }}</div>
@@ -177,7 +193,9 @@ onMounted(loadList)
             <div class="detail-header">
               <div class="detail-question">{{ selected.question || '（无提问内容）' }}</div>
               <div class="detail-meta">
-                <span class="record-state" :class="stateClass(selected.state)">{{ stateText(selected.state) }}</span>
+                <span class="record-state" :class="stateClass(selected.state)">{{
+                  stateText(selected.state)
+                }}</span>
                 <span>回合 {{ selected.totalRounds ?? 0 }}</span>
                 <span>工具调用 {{ selected.toolCallCount ?? 0 }}</span>
                 <span>LLM 调用 {{ selected.llmCallCount ?? 0 }}</span>
@@ -191,7 +209,9 @@ onMounted(loadList)
                   创建快照
                 </button>
               </div>
-              <div v-if="selected.errorMessage" class="detail-error">{{ selected.errorMessage }}</div>
+              <div v-if="selected.errorMessage" class="detail-error">
+                {{ selected.errorMessage }}
+              </div>
             </div>
 
             <div v-if="snapshots.length" class="snapshot-list">
@@ -199,7 +219,8 @@ onMounted(loadList)
               <div v-for="s in snapshots" :key="s.id" class="snapshot-item">
                 <span class="snapshot-state">{{ snapshotStateText(s.state) }}</span>
                 <span class="snapshot-meta">
-                  {{ s.agentName || 'Agent' }} · 第 {{ s.round ?? 0 }} 轮 · {{ formatTime(s.createTime) }}
+                  {{ s.agentName || 'Agent' }} · 第 {{ s.round ?? 0 }} 轮 ·
+                  {{ formatTime(s.createTime) }}
                 </span>
                 <button class="action-btn sm danger" @click="deleteSnapshot(s.id)">
                   <Icon name="trash" :size="12" />
@@ -207,25 +228,39 @@ onMounted(loadList)
               </div>
             </div>
 
-            <div v-if="selected.thinkActs.length === 0" class="detail-empty">该执行没有 think-act 明细</div>
+            <div v-if="selected.thinkActs.length === 0" class="detail-empty">
+              该执行没有 think-act 明细
+            </div>
             <div v-else class="think-act-list">
               <div v-for="ta in selected.thinkActs" :key="ta.id" class="think-act">
                 <button class="think-act-head" @click="toggleThinkAct(ta.id)">
-                  <Icon name="chevron-right" :size="13" class="caret" :class="{ rotated: expandedThinkActs.has(ta.id) }" />
+                  <Icon
+                    name="chevron-right"
+                    :size="13"
+                    class="caret"
+                    :class="{ rotated: expandedThinkActs.has(ta.id) }"
+                  />
                   <Icon name="brain" :size="14" class="think-icon" />
                   <span class="round-badge">第 {{ ta.round }} 轮</span>
-                  <span class="think-preview">{{ shortText(ta.thinking, 60) || '无思考内容' }}</span>
+                  <span class="think-preview">{{
+                    shortText(ta.thinking, 60) || '无思考内容'
+                  }}</span>
                 </button>
                 <div v-if="expandedThinkActs.has(ta.id)" class="think-act-body">
                   <div v-if="ta.thinking" class="think-text">{{ ta.thinking }}</div>
                   <div v-if="ta.hasToolCall && ta.tools.length" class="tool-list">
                     <div v-for="t in ta.tools" :key="t.id" class="tool-item">
                       <div class="tool-head" @click="toggleTool(t.id)">
-                        <span class="tool-status" :class="t.status === 'SUCCESS' ? 'tool-ok' : 'tool-fail'">
+                        <span
+                          class="tool-status"
+                          :class="t.status === 'SUCCESS' ? 'tool-ok' : 'tool-fail'"
+                        >
                           {{ toolStateText(t.status) }}
                         </span>
                         <span class="tool-name">{{ t.toolName }}</span>
-                        <span class="tool-duration">{{ ((t.durationMs ?? 0) / 1000).toFixed(1) }}s</span>
+                        <span class="tool-duration"
+                          >{{ ((t.durationMs ?? 0) / 1000).toFixed(1) }}s</span
+                        >
                       </div>
                       <div v-if="expandedTools.has(t.id)" class="tool-detail">
                         <div v-if="t.arguments" class="tool-block">

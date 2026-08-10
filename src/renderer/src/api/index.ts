@@ -89,7 +89,11 @@ api.interceptors.response.use(
     // 主动取消的请求不提示
     if (axios.isCancel(error)) return Promise.reject(error)
     const message = normalizeError(error)
-    notifyError(message)
+    // 应用启动初期后端 JAR 尚未就绪，此时连接失败属预期（界面仍在 StartupLoading 等待），
+    // 静默不弹窗，避免出现"无法连接后端服务"的干扰提示；就绪后的错误照常提示。
+    const isStartupConnectFail =
+      !isBackendConfigured() && axios.isAxiosError(error) && !error.response
+    if (!isStartupConnectFail) notifyError(message)
     return Promise.reject(new ApiError(-1, message))
   }
 )
@@ -98,8 +102,18 @@ api.interceptors.response.use(
  * 更新后端地址（由主进程通知端口后调用）
  * 生产环境 Electron 从 file:// 加载页面，需要直接指定后端地址。
  */
+let backendConfigured = false
 export function setBackendPort(port: number): void {
   api.defaults.baseURL = `http://127.0.0.1:${port}`
+  backendConfigured = true
+}
+
+/**
+ * 后端是否已就绪
+ * <p>生产环境等待主进程下发端口后置为就绪；开发环境走 Vite proxy，始终视为就绪。</p>
+ */
+export function isBackendConfigured(): boolean {
+  return backendConfigured || import.meta.env.DEV
 }
 
 /**

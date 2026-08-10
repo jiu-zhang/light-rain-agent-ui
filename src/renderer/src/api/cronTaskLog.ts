@@ -42,29 +42,31 @@ export interface CronTaskLogPageResult {
 export const cronTaskLogApi = {
   /**
    * 分页查询定时任务日志
-   * 
+   *
    * @param params 查询参数
    * @returns 分页日志结果
    * @example
    * ```ts
    * // 查询所有任务的最近日志
    * cronTaskLogApi.pageLogs({ pageNum: 1, pageSize: 20 })
-   * 
+   *
    * // 查询指定任务的执行历史
-   * cronTaskLogApi.pageLogs({ 
-   *   pageNum: 1, 
-   *   pageSize: 20, 
+   * cronTaskLogApi.pageLogs({
+   *   pageNum: 1,
+   *   pageSize: 20,
    *   taskId: 123
    * })
    * ```
    */
   pageLogs(params: CronTaskLogPageQuery): Promise<ApiResponse<CronTaskLogPageResult>> {
-    return api.get('/cron-task-logs/page', { 
-      params: {
-        pageNum: params.pageNum || 1,
-        pageSize: params.pageSize || 20,
-        taskId: params.taskId
-      }
-    }).then((res) => res.data)
+    return api
+      .get('/cron-task-logs/page', {
+        params: {
+          pageNum: params.pageNum || 1,
+          pageSize: params.pageSize || 20,
+          taskId: params.taskId
+        }
+      })
+      .then((res) => res.data)
   }
 }

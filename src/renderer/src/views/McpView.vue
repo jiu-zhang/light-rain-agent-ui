@@ -107,7 +107,7 @@ async function saveForm(): Promise<void> {
 
 async function toggleConnect(c: McpConfig): Promise<void> {
   if (connectingId.value) return
-  
+
   if (c.connectionStatus === 1) {
     try {
       await mcpApi.disconnect(c.id)
@@ -179,7 +179,7 @@ onMounted(loadConfigs)
 </script>
 
 <template>
-<div class="page-layout">
+  <div class="page-layout">
     <div class="sidebar">
       <div class="sidebar-header">
         <h2 class="sidebar-title">MCP 服务器列表</h2>
@@ -188,7 +188,7 @@ onMounted(loadConfigs)
           <span>新建服务器</span>
         </button>
       </div>
-      
+
       <div v-if="loading" class="sidebar-content loading">
         <span>加载中...</span>
       </div>
@@ -218,134 +218,145 @@ onMounted(loadConfigs)
       </div>
 
       <div class="section-block">
-      <div class="section-head">
-        <span class="section-label">
-          <Icon name="globe" :size="12" />
-          已配置的服务器
-        </span>
-        <button class="action-btn sm" @click="openCreate">
-          <Icon name="plus" :size="12" />
-          <span>新建服务器</span>
-        </button>
-      </div>
-
-      <div v-if="loading" class="state-box">
-        <span>加载中...</span>
-      </div>
-      <div v-else-if="configs.length === 0" class="state-box">
-        <span style="font-size: 13px">暂无 MCP 服务器，点击"新建服务器"添加一个</span>
-      </div>
-      <div v-else class="list">
-        <div v-for="c in configs" :key="c.id" class="list-item">
-          <div class="list-item-main">
-            <div class="list-item-title">
-              {{ c.name }}
-              <span class="transport-badge">{{ transportBadge(c.transportType) }}</span>
-              <span v-if="c.transportType !== 'STDIO'" class="url-text">{{ c.baseUrl }}</span>
-              <span v-else class="url-text">{{ c.command }}</span>
-            </div>
-            <div class="list-item-meta">
-              <template v-if="c.errorMessage">上次失败: {{ c.errorMessage }}</template>
-              <template v-else-if="c.connectedTime">连接于 {{ formatTime(c.connectedTime) }}</template>
-              <template v-else>尚未连接</template>
-            </div>
-          </div>
-          <button class="toggle-btn" :class="statusInfo(c.connectionStatus).cls" @click="toggleConnect(c)">
-            <Icon v-if="connectingId === c.id" name="loader" :size="11" class="spin" />
-            {{ connectingId === c.id ? '连接中' : statusInfo(c.connectionStatus).label }}
-          </button>
-          <button class="action-btn sm" @click="openEdit(c)">
-            <Icon name="edit" :size="12" />
-            <span>编辑</span>
-          </button>
-          <button class="action-btn sm danger" @click="confirmDelete(c)">
-            <Icon name="trash" :size="12" />
-            <span>删除</span>
+        <div class="section-head">
+          <span class="section-label">
+            <Icon name="globe" :size="12" />
+            已配置的服务器
+          </span>
+          <button class="action-btn sm" @click="openCreate">
+            <Icon name="plus" :size="12" />
+            <span>新建服务器</span>
           </button>
         </div>
-      </div>
-    </div>
 
-    <!-- 新建/编辑弹框 -->
-    <div v-if="showForm" class="modal-inner-overlay">
-      <div class="modal-inner-box">
-        <h3>{{ editingId ? '编辑 MCP 服务器' : '新建 MCP 服务器' }}</h3>
-        <div class="form-row">
-          <label>服务器名称</label>
-          <input v-model="form.name" placeholder="如：本地文件系统" />
+        <div v-if="loading" class="state-box">
+          <span>加载中...</span>
         </div>
-        <div class="form-row">
-          <label>传输方式</label>
-          <div class="transport-tabs">
+        <div v-else-if="configs.length === 0" class="state-box">
+          <span style="font-size: 13px">暂无 MCP 服务器，点击"新建服务器"添加一个</span>
+        </div>
+        <div v-else class="list">
+          <div v-for="c in configs" :key="c.id" class="list-item">
+            <div class="list-item-main">
+              <div class="list-item-title">
+                {{ c.name }}
+                <span class="transport-badge">{{ transportBadge(c.transportType) }}</span>
+                <span v-if="c.transportType !== 'STDIO'" class="url-text">{{ c.baseUrl }}</span>
+                <span v-else class="url-text">{{ c.command }}</span>
+              </div>
+              <div class="list-item-meta">
+                <template v-if="c.errorMessage">上次失败: {{ c.errorMessage }}</template>
+                <template v-else-if="c.connectedTime"
+                  >连接于 {{ formatTime(c.connectedTime) }}</template
+                >
+                <template v-else>尚未连接</template>
+              </div>
+            </div>
             <button
-              v-for="t in TRANSPORTS"
-              :key="t"
-              class="transport-tab"
-              :class="{ active: form.transportType === t }"
-              @click="form.transportType = t"
+              class="toggle-btn"
+              :class="statusInfo(c.connectionStatus).cls"
+              @click="toggleConnect(c)"
             >
-              {{ t === 'STREAMABLE' ? 'Streamable HTTP' : t }}
+              <Icon v-if="connectingId === c.id" name="loader" :size="11" class="spin" />
+              {{ connectingId === c.id ? '连接中' : statusInfo(c.connectionStatus).label }}
+            </button>
+            <button class="action-btn sm" @click="openEdit(c)">
+              <Icon name="edit" :size="12" />
+              <span>编辑</span>
+            </button>
+            <button class="action-btn sm danger" @click="confirmDelete(c)">
+              <Icon name="trash" :size="12" />
+              <span>删除</span>
             </button>
           </div>
         </div>
-        <template v-if="!isStdio">
-          <div class="form-row">
-            <label>服务器地址 (baseUrl)</label>
-            <input v-model="form.baseUrl" placeholder="如：http://localhost:8081/mcp" />
-          </div>
-          <div class="form-row">
-            <label>自定义端点路径（可选，默认 /mcp）</label>
-            <input v-model="form.endpoint" placeholder="如 /mcp/sse" />
-          </div>
-          <div class="form-row">
-            <label>请求头（JSON，可选）</label>
-            <input v-model="form.headers" placeholder='如 {"Authorization": "Bearer xxx"}' />
-          </div>
-        </template>
-        <template v-else>
-          <div class="form-row">
-            <label>启动命令</label>
-            <input v-model="form.command" placeholder="如：npx" />
-          </div>
-          <div class="form-row">
-            <label>启动参数（JSON 数组，可选）</label>
-            <input v-model="form.args" placeholder='如 ["-y", "@modelcontextprotocol/server-filesystem"]' />
-          </div>
-          <div class="form-row">
-            <label>环境变量（JSON 对象，可选）</label>
-            <input v-model="form.env" placeholder='如 {"KEY": "value"}' />
-          </div>
-        </template>
-        <div class="form-row">
-          <label>请求超时（秒）</label>
-          <input v-model.number="form.requestTimeout" type="number" min="1" />
-        </div>
-        <div class="form-actions">
-          <button class="action-btn" @click="cancelForm">取消</button>
-          <button
-            class="action-btn primary"
-            :disabled="
-              !form.name.trim() || (!isStdio && !form.baseUrl?.trim()) || (isStdio && !form.command?.trim())
-            "
-            @click="saveForm"
-          >
-            保存
-          </button>
-        </div>
       </div>
+
+      <!-- 新建/编辑弹框 -->
+      <div v-if="showForm" class="modal-inner-overlay">
+        <div class="modal-inner-box">
+          <h3>{{ editingId ? '编辑 MCP 服务器' : '新建 MCP 服务器' }}</h3>
+          <div class="form-row">
+            <label>服务器名称</label>
+            <input v-model="form.name" placeholder="如：本地文件系统" />
+          </div>
+          <div class="form-row">
+            <label>传输方式</label>
+            <div class="transport-tabs">
+              <button
+                v-for="t in TRANSPORTS"
+                :key="t"
+                class="transport-tab"
+                :class="{ active: form.transportType === t }"
+                @click="form.transportType = t"
+              >
+                {{ t === 'STREAMABLE' ? 'Streamable HTTP' : t }}
+              </button>
+            </div>
+          </div>
+          <template v-if="!isStdio">
+            <div class="form-row">
+              <label>服务器地址 (baseUrl)</label>
+              <input v-model="form.baseUrl" placeholder="如：http://localhost:8081/mcp" />
+            </div>
+            <div class="form-row">
+              <label>自定义端点路径（可选，默认 /mcp）</label>
+              <input v-model="form.endpoint" placeholder="如 /mcp/sse" />
+            </div>
+            <div class="form-row">
+              <label>请求头（JSON，可选）</label>
+              <input v-model="form.headers" placeholder='如 {"Authorization": "Bearer xxx"}' />
+            </div>
+          </template>
+          <template v-else>
+            <div class="form-row">
+              <label>启动命令</label>
+              <input v-model="form.command" placeholder="如：npx" />
+            </div>
+            <div class="form-row">
+              <label>启动参数（JSON 数组，可选）</label>
+              <input
+                v-model="form.args"
+                placeholder='如 ["-y", "@modelcontextprotocol/server-filesystem"]'
+              />
+            </div>
+            <div class="form-row">
+              <label>环境变量（JSON 对象，可选）</label>
+              <input v-model="form.env" placeholder='如 {"KEY": "value"}' />
+            </div>
+          </template>
+          <div class="form-row">
+            <label>请求超时（秒）</label>
+            <input v-model.number="form.requestTimeout" type="number" min="1" />
+          </div>
+          <div class="form-actions">
+            <button class="action-btn" @click="cancelForm">取消</button>
+            <button
+              class="action-btn primary"
+              :disabled="
+                !form.name.trim() ||
+                (!isStdio && !form.baseUrl?.trim()) ||
+                (isStdio && !form.command?.trim())
+              "
+              @click="saveForm"
+            >
+              保存
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- 删除确认弹框 -->
-  <ConfirmDialog
-    v-if="showDeleteConfirm"
-    title="确认删除 MCP 服务器"
-    :message="`您即将删除 MCP 服务器：${configToDelete?.name}\n\n删除后无法恢复，请谨慎操作。`"
-    confirm-text="确认删除"
-    cancel-text="取消"
-    @confirm="handleDelete"
-    @cancel="cancelDelete"
-  />
+    <ConfirmDialog
+      v-if="showDeleteConfirm"
+      title="确认删除 MCP 服务器"
+      :message="`您即将删除 MCP 服务器：${configToDelete?.name}\n\n删除后无法恢复，请谨慎操作。`"
+      confirm-text="确认删除"
+      cancel-text="取消"
+      @confirm="handleDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 

@@ -11,7 +11,6 @@ const modelsMap = ref<Record<number, AiModelList[]>>({})
 const selectedProviderId = ref<number | null>(null)
 const loading = ref(false)
 
-
 const selectedProvider = computed(() =>
   providers.value.find((p) => p.id === selectedProviderId.value)
 )
@@ -113,7 +112,7 @@ async function saveModel(): Promise<void> {
     showModelForm.value = false
     await loadAll()
   } catch (e) {
-    console.warn(e)
+    console.warn('保存模型失败:', e)
   }
 }
 
@@ -143,7 +142,7 @@ async function deleteModel(): Promise<void> {
     showDeleteConfirm.value = false
     modelToDelete.value = null
   } catch (e) {
-    console.warn(e)
+    console.warn('删除模型失败:', e)
   }
 }
 
@@ -174,7 +173,7 @@ async function savePatch(): Promise<void> {
     showProviderPatch.value = false
     await loadAll()
   } catch (e) {
-    console.warn(e)
+    console.warn('更新厂商配置失败:', e)
   }
 }
 
@@ -229,11 +228,11 @@ onMounted(() => loadAll())
                 <div class="provider-name-row">
                   <span class="provider-name">{{ p.name }}</span>
                 </div>
-                  <div class="provider-sub">
-                    <span class="provider-code">{{ p.code }}</span>
-                    <span class="provider-sep">·</span>
-                    <span class="provider-models">{{ p.modelCount || 0 }} 模型</span>
-                  </div>
+                <div class="provider-sub">
+                  <span class="provider-code">{{ p.code }}</span>
+                  <span class="provider-sep">·</span>
+                  <span class="provider-models">{{ p.modelCount || 0 }} 模型</span>
+                </div>
               </div>
               <button
                 class="mini-btn edit"
@@ -275,11 +274,7 @@ onMounted(() => loadAll())
             </div>
 
             <div v-else class="model-list">
-              <div
-                v-for="m in currentModels"
-                :key="m.id"
-                class="model-card"
-              >
+              <div v-for="m in currentModels" :key="m.id" class="model-card">
                 <div class="model-card-head">
                   <div class="model-card-name">
                     <span class="model-name">{{ m.name }}</span>
@@ -579,7 +574,6 @@ onMounted(() => loadAll())
 .provider-models {
   color: var(--text-quaternary);
 }
-
 
 .provider-item .mini-btn {
   opacity: 0;

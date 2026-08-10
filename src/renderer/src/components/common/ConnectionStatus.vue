@@ -23,6 +23,7 @@ const statusMessage = ref('检测连接状态...')
 let pingInterval: number | null = null
 let reconnectTimeout: number | null = null
 let disposeBackendReady: (() => void) | null = null
+let disposeBackendDown: (() => void) | null = null
 
 /** 后端地址是否已就绪（生产环境需等主进程通知端口） */
 function backendConfigured(): boolean {
@@ -135,12 +136,20 @@ onMounted(() => {
     ping()
   })
 
+  // 后端进程崩溃：立即标记断开并触发重连，无需等待下一个 10s 轮询
+  disposeBackendDown = window.api.onBackendDown(() => {
+    state.value = ConnectionState.DISCONNECTED
+    statusMessage.value = '后端服务已退出，正在尝试重连'
+    ping()
+  })
+
   ping()
   pingInterval = window.setInterval(ping, 10000)
 })
 
 onBeforeUnmount(() => {
   disposeBackendReady?.()
+  disposeBackendDown?.()
   if (pingInterval) {
     clearInterval(pingInterval)
     pingInterval = null

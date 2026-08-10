@@ -36,13 +36,15 @@ export const planApi = {
 
   /** 查询某会话最近一次执行记录 */
   latestBySession(sessionId: string): Promise<ApiResponse<ExecutionRecord>> {
-    return api
-      .get('/ai/plan/execution/latest', { params: { sessionId } })
-      .then((res) => res.data)
+    return api.get('/ai/plan/execution/latest', { params: { sessionId } }).then((res) => res.data)
   },
 
   /** 分页查询执行记录列表（不含明细） */
-  pageExecutions(params: { sessionId?: string; page?: number; size?: number }): Promise<ApiResponse<ExecutionRecord[]>> {
+  pageExecutions(params: {
+    sessionId?: string
+    page?: number
+    size?: number
+  }): Promise<ApiResponse<ExecutionRecord[]>> {
     return api.get('/ai/plan/execution', { params }).then((res) => res.data)
   },
 
@@ -77,7 +79,10 @@ export const planApi = {
     return api.post('/ai/plan/template', data).then((res) => res.data)
   },
 
-  updateTemplate(id: string | number, data: Partial<PlanTemplate>): Promise<ApiResponse<PlanTemplate>> {
+  updateTemplate(
+    id: string | number,
+    data: Partial<PlanTemplate>
+  ): Promise<ApiResponse<PlanTemplate>> {
     return api.put(`/ai/plan/template/${id}`, data).then((res) => res.data)
   },
 
@@ -91,7 +96,10 @@ export const planApi = {
   },
 
   /** 回滚模板到指定版本 */
-  rollbackTemplate(id: string | number, versionId: string | number): Promise<ApiResponse<PlanTemplate>> {
+  rollbackTemplate(
+    id: string | number,
+    versionId: string | number
+  ): Promise<ApiResponse<PlanTemplate>> {
     return api.post(`/ai/plan/template/${id}/rollback/${versionId}`).then((res) => res.data)
   }
 }

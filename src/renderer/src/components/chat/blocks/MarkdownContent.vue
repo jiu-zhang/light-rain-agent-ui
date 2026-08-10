@@ -24,21 +24,24 @@ const MAX_RENDER_CACHE = 200
 
 /**
  * 渲染 markdown 内容，流式输出时在末尾追加闪烁光标。
- * <p>DOMPurify 消毒 + 缓存复用，避免流式重渲染重复解析。</p>
+ * <p>DOMPurify 消毒 + 缓存复用，避免流式重渲染重复解析。
+ * 流式期间（withCursor）每次内容都不同，缓存必然 miss 还会堆积中间态字符串，直接跳过缓存。</p>
  */
 function renderMarkdown(content: string | undefined, withCursor: boolean): string {
   if (!content) return ''
-  const cached = renderCache.get(content)
-  if (cached !== undefined) {
-    return withCursor ? cached + '<span class="stream-cursor"></span>' : cached
+  if (!withCursor) {
+    const cached = renderCache.get(content)
+    if (cached !== undefined) return cached
   }
   try {
     // 先补齐未闭合代码块，保证每次传给 marked 的都是结构完整的内容
     const sanitized = closeOpenCodeBlock(content)
     // marked 不提供净化能力，AI 输出可能携带恶意 HTML，渲染前必须用 DOMPurify 消毒
     const html = DOMPurify.sanitize(marked.parse(sanitized) as string)
-    if (renderCache.size >= MAX_RENDER_CACHE) renderCache.clear()
-    renderCache.set(content, html)
+    if (!withCursor) {
+      if (renderCache.size >= MAX_RENDER_CACHE) renderCache.clear()
+      renderCache.set(content, html)
+    }
     return withCursor ? html + '<span class="stream-cursor"></span>' : html
   } catch {
     return content
@@ -78,6 +81,8 @@ onMounted(mountCopyButtons)
 </script>
 
 <template>
+  <!-- 内容已由 renderMarkdown 中的 DOMPurify.sanitize 消毒，此处 v-html 是安全的 -->
+  <!-- eslint-disable-next-line vue/no-v-html -->
   <div ref="rootRef" class="msg-content" :class="{ 'is-user': isUser }" v-html="html"></div>
 </template>
 

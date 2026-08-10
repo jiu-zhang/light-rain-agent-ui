@@ -18,7 +18,16 @@ const emit = defineEmits<{
       <div class="confirm-box">
         <div class="confirm-header">
           <div class="confirm-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -29,7 +38,9 @@ const emit = defineEmits<{
         <p class="confirm-message">{{ message || '确定要执行此操作吗？' }}</p>
         <div class="confirm-actions">
           <button class="btn btn-cancel" @click="emit('cancel')">{{ cancelText || '取消' }}</button>
-          <button class="btn btn-confirm" @click="emit('confirm')">{{ confirmText || '确定' }}</button>
+          <button class="btn btn-confirm" @click="emit('confirm')">
+            {{ confirmText || '确定' }}
+          </button>
         </div>
       </div>
     </div>
@@ -50,8 +61,12 @@ const emit = defineEmits<{
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .confirm-box {
@@ -66,8 +81,14 @@ const emit = defineEmits<{
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .confirm-header {
