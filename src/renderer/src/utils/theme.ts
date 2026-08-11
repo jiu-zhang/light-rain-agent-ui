@@ -10,15 +10,6 @@ export function initTheme(): void {
   applyThemeMode(mode)
 }
 
-export function setTheme(theme: Theme): void {
-  localStorage.setItem(THEME_MODE_KEY, theme)
-  applyThemeMode(theme)
-}
-
-export function getTheme(): Theme {
-  return (localStorage.getItem(THEME_KEY) as Theme) || 'dark'
-}
-
 export function getThemeMode(): ThemeMode {
   return (localStorage.getItem(THEME_MODE_KEY) as ThemeMode) || 'system'
 }

@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import {
   getThemeMode,
   setThemeMode,
-  getAiParams,
-  setAiParams,
   getChatPrefs,
   setChatPrefs,
   getCustomThemeVars,
@@ -12,15 +10,55 @@ import {
   resetCustomTheme,
   type ThemeMode
 } from '@renderer/utils'
+import { configApi } from '@renderer/api/config'
 import Icon, { type IconName } from '@renderer/components/common/Icon.vue'
 import ColorPicker from '@renderer/components/common/ColorPicker.vue'
 
 const themeMode = ref<ThemeMode>(getThemeMode())
-const aiParams = ref(getAiParams())
 const chatPrefs = ref(getChatPrefs())
 
-watch(aiParams, () => setAiParams(aiParams.value), { deep: true })
+/** 后端全局 AI 配置（ai_config 表），保存后影响所有对话 */
+const aiConfig = ref({
+  systemPrompt: '',
+  temperature: 0.7,
+  maxTokens: 0
+})
+
+const saving = ref(false)
+
 watch(chatPrefs, () => setChatPrefs({ ...chatPrefs.value }), { deep: true })
+
+onMounted(async () => {
+  try {
+    const res = await configApi.list()
+    const map = res.data || {}
+    aiConfig.value = {
+      systemPrompt: map['system_prompt'] ?? '',
+      temperature:
+        map['temperature'] !== undefined && map['temperature'] !== ''
+          ? Number(map['temperature'])
+          : 0.7,
+      maxTokens:
+        map['max_tokens'] !== undefined && map['max_tokens'] !== '' ? Number(map['max_tokens']) : 0
+    }
+  } catch {
+    // 已由拦截器统一提示
+  }
+})
+
+/** 保存全局 AI 配置到后端 */
+async function saveAiConfig(): Promise<void> {
+  saving.value = true
+  try {
+    await configApi.save({
+      system_prompt: aiConfig.value.systemPrompt,
+      temperature: String(aiConfig.value.temperature),
+      max_tokens: String(Math.max(0, Math.floor(aiConfig.value.maxTokens)))
+    })
+  } finally {
+    saving.value = false
+  }
+}
 
 function applyTheme(mode: ThemeMode): void {
   themeMode.value = mode
@@ -188,10 +226,11 @@ function handleResetCustomTheme(): void {
   <div class="section-block">
     <div class="section-label">系统提示词</div>
     <textarea
-      v-model="aiParams.systemPrompt"
+      v-model="aiConfig.systemPrompt"
       class="prompt-textarea"
       rows="4"
       placeholder="设置 AI 助手的角色和行为方式，例如：你是一个专业的编程助手..."
+      @blur="saveAiConfig"
     />
   </div>
 
@@ -204,40 +243,41 @@ function handleResetCustomTheme(): void {
       <div class="param-row">
         <div class="param-info">
           <div class="param-name">温度 (Temperature)</div>
-          <div class="param-desc">控制输出随机性，越高越有创意</div>
+          <div class="param-desc">控制输出随机性，越高越有创意，全局生效</div>
         </div>
         <div class="param-control">
-          <input v-model.number="aiParams.temperature" type="range" min="0" max="2" step="0.1" />
-          <span class="param-value">{{ aiParams.temperature }}</span>
+          <input
+            v-model.number="aiConfig.temperature"
+            type="range"
+            min="0"
+            max="2"
+            step="0.1"
+            @change="saveAiConfig"
+          />
+          <span class="param-value">{{ aiConfig.temperature }}</span>
         </div>
       </div>
       <div class="param-row">
         <div class="param-info">
           <div class="param-name">最大 Token 数</div>
-          <div class="param-desc">限制单次回复最大长度</div>
+          <div class="param-desc">限制单次回复最大长度，0 表示不限制</div>
         </div>
         <div class="param-control">
           <input
-            v-model.number="aiParams.maxTokens"
+            v-model.number="aiConfig.maxTokens"
             type="number"
-            min="256"
+            min="0"
             max="128000"
             step="1"
             class="param-input"
+            @change="saveAiConfig"
           />
         </div>
       </div>
-      <div class="param-row">
-        <div class="param-info">
-          <div class="param-name">Top-P 采样</div>
-          <div class="param-desc">核采样概率阈值</div>
-        </div>
-        <div class="param-control">
-          <input v-model.number="aiParams.topP" type="range" min="0" max="1" step="0.05" />
-          <span class="param-value">{{ aiParams.topP }}</span>
-        </div>
-      </div>
     </div>
+    <button class="save-btn" :disabled="saving" @click="saveAiConfig">
+      {{ saving ? '保存中...' : '保存配置' }}
+    </button>
   </div>
 </template>
 
@@ -405,6 +445,25 @@ function handleResetCustomTheme(): void {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.save-btn {
+  margin-top: 14px;
+  padding: 8px 18px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.save-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .param-row {
   display: flex;

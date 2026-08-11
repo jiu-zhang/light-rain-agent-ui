@@ -2,10 +2,8 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { notifyError } from '@renderer/utils/feedback'
 import api, { setBackendPort } from '@renderer/api'
+import { DEFAULT_BACKEND_PORT } from '@shared/constants'
 import Icon, { type IconName } from './Icon.vue'
-
-/** 后端默认端口（与主进程 DEFAULT_BACKEND_PORT 保持一致） */
-const DEFAULT_BACKEND_PORT = 18080
 
 enum ConnectionState {
   UNKNOWN = 'unknown',

@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import api, { setBackendPort } from '@renderer/api/index'
-
-/** 后端默认端口（与主进程 DEFAULT_BACKEND_PORT 保持一致） */
-const DEFAULT_BACKEND_PORT = 18080
+import { DEFAULT_BACKEND_PORT } from '@shared/constants'
 
 declare const __APP_VERSION__: string
 const appVersion = __APP_VERSION__
@@ -15,6 +13,16 @@ const status = ref('正在启动服务...')
 const dots = ref('')
 let disposeBackendReady: (() => void) | null = null
 let healthTimer: ReturnType<typeof setInterval> | null = null
+let msgTimer: ReturnType<typeof setInterval> | null = null
+let dotsTimer: ReturnType<typeof setInterval> | null = null
+
+/** 隐藏加载层并清理所有定时器（幂等） */
+function finishLoading(): void {
+  if (msgTimer) clearInterval(msgTimer)
+  if (healthTimer) clearInterval(healthTimer)
+  if (dotsTimer) clearInterval(dotsTimer)
+  visible.value = false
+}
 
 /** 探测后端是否已就绪（刷新场景下事件已错过，需主动探测） */
 async function probeBackend(): Promise<boolean> {
@@ -53,7 +61,7 @@ onMounted(async () => {
   isFirstBoot.value = true
   const messages = ['正在启动服务...', '后端服务加载中...', '即将就绪...']
   let msgIdx = 0
-  const msgTimer = setInterval(() => {
+  msgTimer = setInterval(() => {
     msgIdx = Math.min(msgIdx + 1, messages.length - 1)
     status.value = messages[msgIdx]
   }, 5000)
@@ -63,29 +71,25 @@ onMounted(async () => {
     if (!dev) {
       setBackendPort(port)
     }
-    clearInterval(msgTimer)
-    if (healthTimer) clearInterval(healthTimer)
-    visible.value = false
+    finishLoading()
   })
 
   // 轮询探测（防止事件错过）
   healthTimer = setInterval(async () => {
     if (await probeBackend()) {
-      clearInterval(msgTimer)
-      if (healthTimer) clearInterval(healthTimer)
-      visible.value = false
+      finishLoading()
     }
   }, 2000)
 
   // 点动动画
-  setInterval(() => {
+  dotsTimer = setInterval(() => {
     dots.value = dots.value.length >= 3 ? '' : dots.value + '.'
   }, 600)
 })
 
 onUnmounted(() => {
   disposeBackendReady?.()
-  if (healthTimer) clearInterval(healthTimer)
+  finishLoading()
 })
 </script>
 
