@@ -166,8 +166,8 @@ async function savePatch(): Promise<void> {
   try {
     await providerApi.update({
       id: patchingProvider.value.id,
-      apiKey: patchForm.value.apiKey || undefined,
-      baseUrl: patchForm.value.baseUrl || undefined,
+      apiKey: patchForm.value.apiKey,
+      baseUrl: patchForm.value.baseUrl,
       sortOrder: patchForm.value.sortOrder
     })
     showProviderPatch.value = false

@@ -103,7 +103,7 @@ async function save(): Promise<void> {
   }
   const payload: Partial<PlanTemplate> = {
     name: formName.value.trim(),
-    description: formDescription.value.trim() || undefined,
+    description: formDescription.value.trim(),
     goal: formGoal.value.trim(),
     stepsJson: JSON.stringify(steps)
   }
